@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Matt 個人減脂與高蛋白精準決策引擎 v3.2</title>
+  <title>Matt 個人減脂與高蛋白精準決策引擎 v3.3</title>
   <!-- 載入 Tailwind CSS 與 React 核心 (CDN 免安裝) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -16,7 +16,6 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", sans-serif;
       -webkit-tap-highlight-color: transparent;
     }
-    /* 隱藏手機橫向捲軸但保留滑動功能 */
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
@@ -27,15 +26,15 @@
   <script type="text/babel">
     const { useState, useMemo, useEffect, useRef } = React;
 
-    // --- 版本與日期資訊 ---
-    const APP_VERSION = 'v3.2 (跨裝置免安裝版)';
+    // --- 核心版本與專屬 Google Apps Script 雲端 API ---
+    const APP_VERSION = 'v3.3 (Google 試算表雲端同步版)';
     const APP_DATE = '2026-11-03';
     const GOAL_TITLE = '家中晨間空腹 70.0 kg';
     const STORAGE_KEY = 'matt_fatloss_engine_v3_state';
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzMEdDcaWNfK1fAWtDp7mrtCGITinl224fbJWk0VRpb47uqn2ayq7P5xLQ4YWXYenFN/exec';
 
     // --- Matt 專屬常備食物與飲品資料庫 ---
     const MATT_CORE_FOODS = [
-      // 1. 高蛋白主力
       { id: 'mp1', category: 'protein', catLabel: '🥩 高蛋白主力', name: '去皮雞胸肉（熟重）', unit: '1 個手掌大 (120–130g)', kcal: 155, p: 31.0, f: 2.0, c: 0, veg: 0, note: '高純度白肉，BCAA 豐富' },
       { id: 'mp2', category: 'protein', catLabel: '🥩 高蛋白主力', name: '大豆分離蛋白粉', unit: '1 匙 (約 30g)', kcal: 120, p: 27.0, f: 0.5, c: 1.5, veg: 0, note: '植物性完全蛋白，快速補足缺口' },
       { id: 'mp3', category: 'protein', catLabel: '🥩 高蛋白主力', name: '高蛋白乳飲品（上友）', unit: '1 瓶 (300mL 實標)', kcal: 148.8, p: 22.2, f: 2.8, c: 8.7, veg: 0, note: 'BCAA 3,957 mg' },
@@ -43,23 +42,15 @@
       { id: 'mp5', category: 'protein', catLabel: '🥩 高蛋白主力', name: '茶葉蛋 (1顆)', unit: '1 顆 (約 50g)', kcal: 75, p: 6.5, f: 5.0, c: 1.0, veg: 0, note: '全蛋完全蛋白、卵磷脂' },
       { id: 'mp6', category: 'protein', catLabel: '🥩 高蛋白主力', name: '茶葉蛋 (2顆組合)', unit: '2 顆 (約 100g)', kcal: 145, p: 13.0, f: 9.5, c: 2.0, veg: 0, note: '晨間／下午常態補給點心' },
       { id: 'mp7', category: 'protein', catLabel: '🥩 高蛋白主力', name: '滴雞精／熬雞精', unit: '1 包 (實標)', kcal: 15.6, p: 3.9, f: 0, c: 0, veg: 0, note: '小分子游離胜肽，極速吸收' },
-
-      // 2. 蔬菜與菌菇
       { id: 'mv1', category: 'veg', catLabel: '🥦 蔬菜與菌菇', name: '青花菜 ＋ 美生菜', unit: '各大半碗 (熟重約 150g)', kcal: 45, p: 3.5, f: 0.4, c: 7.5, veg: 1.5, note: '高鉀高纖、蘿蔔硫素抗炎' },
       { id: 'mv2', category: 'veg', catLabel: '🥦 蔬菜與菌菇', name: '杏鮑菇', unit: '約半碗 (約 80g)', kcal: 30, p: 2.5, f: 0.3, c: 5.0, veg: 1.0, note: '多醣體、高纖飽足' },
-
-      // 3. 晨間與代謝飲品
       { id: 'md1', category: 'drink', catLabel: '🍵 晨間與代謝飲品', name: '大麥若葉青汁', unit: '1 包 (約 3g 沖泡)', kcal: 10, p: 0.8, f: 0.1, c: 1.5, veg: 0.3, note: '高鉀排鈉、活性葉綠素消腫' },
       { id: 'md2', category: 'drink', catLabel: '🍵 晨間與代謝飲品', name: '無糖黑咖啡', unit: '1 杯 (250–300mL)', kcal: 10, p: 0.5, f: 0, c: 2.0, veg: 0, note: '咖啡因、綠原酸提升代謝' },
       { id: 'md3', category: 'drink', catLabel: '🍵 晨間與代謝飲品', name: '無糖玉米鬚茶', unit: '1 杯/瓶 (350–500mL)', kcal: 0, p: 0.0, f: 0, c: 0, veg: 0, note: '超高鉀離子利水排鈉、零熱量' },
-
-      // 4. 碳水與微調飲品
       { id: 'mc1', category: 'carb', catLabel: '🌾 碳水與微調飲品', name: '蘿蔔糕（乾煎無多油）', unit: '1 小片 (手指大 25–30g)', kcal: 45, p: 0.8, f: 1.2, c: 7.8, veg: 0, note: '在地米漿碳水' },
       { id: 'mc2', category: 'carb', catLabel: '🌾 碳水與微調飲品', name: '堅果升級版雙和茶', unit: '1 包 (15–18g 沖泡)', kcal: 70, p: 0.8, f: 3.5, c: 9.0, veg: 0, note: '肉桂當歸溫陽活血，含杏仁核桃' },
       { id: 'mc3', category: 'carb', catLabel: '🌾 碳水與微調飲品', name: '蜂蜜綠茶（少蜂蜜）', unit: '1 杯 (約 500mL)', kcal: 80, p: 0.0, f: 0, c: 20.0, veg: 0, note: '兒茶素抗氧化，含微量果糖' },
       { id: 'mc4', category: 'carb', catLabel: '🌾 碳水與微調飲品', name: '粉角（手搖配料）', unit: '半份～一份 (40–50g)', kcal: 95, p: 0.2, f: 0, c: 23.5, veg: 0, note: '樹薯粉質地，咀嚼滿足感' },
-
-      // 5. 水果點心
       { id: 'mf1', category: 'fruit', catLabel: '🍊 水果點心', name: '香吉士', unit: '半個 (果肉 60–70g)', kcal: 32, p: 0.6, f: 0.1, c: 7.8, veg: 0, note: '天然維生素 C、柑橘生物類黃酮' },
       { id: 'mf2', category: 'fruit', catLabel: '🍊 水果點心', name: '鮮榨柳橙汁', unit: '70 mL (純原汁無加糖)', kcal: 32, p: 0.5, f: 0.1, c: 7.6, veg: 0, note: '微量鉀與抗氧化植化素' },
     ];
@@ -258,11 +249,13 @@
       const [exportFormat, setExportFormat] = useState('txt');
       const [copied, setCopied] = useState(false);
       const [downloadedNotice, setDownloadedNotice] = useState('');
+      const [cloudStatus, setCloudStatus] = useState('雲端連線就緒');
+      const [isSyncing, setIsSyncing] = useState(false);
+      const [cloudHistoryList, setCloudHistoryList] = useState([]);
       const [syncCodeInput, setSyncCodeInput] = useState('');
       const [lastSavedTime, setLastSavedTime] = useState('已同步');
       const [confirmReset, setConfirmReset] = useState(false);
 
-      // 封裝完整狀態物件
       const currentFullState = useMemo(() => ({
         selectedDay, selectedMilestone, modeOverride, portionMultiplier, edamameCount,
         savedCustomFoods, foodLogs, waterMl, workoutLogs, dailySteps, currentHomeWeight,
@@ -275,7 +268,7 @@
         fatigueLevel, isTwoWeeksStuck, isTravelWeek, weightHistory
       ]);
 
-      // 自動同步至 LocalStorage
+      // 本機自動暫存
       useEffect(() => {
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(currentFullState));
@@ -286,7 +279,67 @@
         }
       }, [currentFullState]);
 
-      // 套用外部匯入的狀態 (手機 ⇄ 電腦互傳)
+      // --- 核心：Google Apps Script 雲端自動讀取 ---
+      const fetchFromGoogleSheet = async () => {
+        try {
+          setCloudStatus('正在從試算表讀取...');
+          const res = await fetch(GAS_API_URL);
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setCloudHistoryList(data);
+            const latest = data[data.length - 1];
+            if (latest.weight && !isNaN(parseFloat(latest.weight))) {
+              const cloudWeight = parseFloat(latest.weight);
+              setCurrentHomeWeight(cloudWeight);
+            }
+            setCloudStatus(`已同步雲端 (${data.length} 筆歷史)`);
+          } else {
+            setCloudStatus('試算表尚無歷史資料');
+          }
+        } catch (e) {
+          setCloudStatus('離線讀取模式 (本機已存)');
+        }
+      };
+
+      useEffect(() => {
+        fetchFromGoogleSheet();
+      }, []);
+
+      // --- 核心：一鍵同步推播至 Google 試算表 ---
+      const pushToGoogleSheet = async () => {
+        setIsSyncing(true);
+        setCloudStatus('正在上傳雲端試算表...');
+        const payload = {
+          date: APP_DATE,
+          weight: currentHomeWeight,
+          kcal: totals.kcal.toFixed(1),
+          protein: totals.p.toFixed(1),
+          carbs: totals.c.toFixed(1),
+          fat: totals.f.toFixed(1),
+          steps: dailySteps,
+          foodLogs: foodLogs.map(f => ({ name: f.name, kcal: f.kcal, p: f.p, c: f.c || 0, f: f.f || 0 }))
+        };
+
+        try {
+          await fetch(GAS_API_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          setCloudStatus('✅ 已成功記錄進 Google 試算表！');
+          setDownloadedNotice('✅ 試算表已更新！');
+          setTimeout(() => {
+            fetchFromGoogleSheet();
+            setDownloadedNotice('');
+          }, 2000);
+        } catch (err) {
+          setCloudStatus('上傳逾時，已轉存本機');
+        } finally {
+          setIsSyncing(false);
+        }
+      };
+
       const applyImportedState = (parsed) => {
         if (!parsed || typeof parsed !== 'object') return;
         if (parsed.selectedDay) setSelectedDay(parsed.selectedDay);
@@ -303,7 +356,6 @@
         setTimeout(() => setDownloadedNotice(''), 3000);
       };
 
-      // 匯出 .json 跨裝置完整備份檔
       const exportBackupJsonFile = () => {
         const jsonStr = JSON.stringify(currentFullState, null, 2);
         const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
@@ -319,7 +371,6 @@
         setTimeout(() => setDownloadedNotice(''), 2500);
       };
 
-      // 讀取 .json 跨裝置備份檔
       const handleImportJsonFile = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -769,7 +820,6 @@ ${mdFoodList || '- 尚無紀錄'}
 
       return (
         <div className="min-h-screen bg-slate-950 text-slate-100 pb-24">
-          {/* 隱藏的檔案讀取器 (供跨裝置匯入 JSON 使用) */}
           <input
             ref={fileInputRef}
             type="file"
@@ -795,7 +845,7 @@ ${mdFoodList || '- 尚無紀錄'}
                     </span>
                     <span className="inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      本機已存 ({lastSavedTime})
+                      {cloudStatus}
                     </span>
                   </div>
                   <p className="text-xs text-slate-300 font-mono mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -808,7 +858,7 @@ ${mdFoodList || '- 尚無紀錄'}
                 </div>
               </div>
 
-              {/* 右側：星期切換 + 跨裝置備份/讀取快捷鍵 */}
+              {/* 頂部按鈕：星期切換 + 一鍵同步試算表 */}
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
                 <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-1 overflow-x-auto no-scrollbar max-w-full">
                   {DAYS_OF_WEEK.map(day => (
@@ -825,31 +875,26 @@ ${mdFoodList || '- 尚無紀錄'}
                 </div>
 
                 <button
-                  onClick={exportBackupJsonFile}
-                  title="將目前所有紀錄打包成 .json 檔案，可傳到手機或電腦讀取"
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600 text-cyan-300 hover:text-white border border-cyan-500/40 font-mono text-xs transition-all"
+                  onClick={pushToGoogleSheet}
+                  disabled={isSyncing}
+                  className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-bold text-xs shadow-sm transition-all ${
+                    isSyncing ? 'bg-slate-700 text-slate-400' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                  }`}
                 >
-                  📤 備份進度(.json)
+                  ☁️ {isSyncing ? '上傳中...' : '同步至試算表'}
                 </button>
 
                 <button
-                  onClick={() => fileInputRef.current?.click()}
-                  title="讀取從手機或電腦傳過來的 .json 進度檔"
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-500/40 font-mono text-xs transition-all"
+                  onClick={fetchFromGoogleSheet}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs"
+                  title="手動重新自試算表抓取歷史"
                 >
-                  📥 讀取進度檔
-                </button>
-
-                <button
-                  onClick={() => downloadFile('txt')}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 font-mono text-xs transition-all"
-                >
-                  📄 存檔.TXT
+                  🔄
                 </button>
               </div>
             </div>
 
-            {/* 目標進度視覺化橫幅 */}
+            {/* 進度條 */}
             <div className="bg-slate-900/80 border-t border-slate-800/80 px-3 sm:px-4 py-2">
               <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                 <div className="flex items-center gap-2 flex-1">
@@ -903,9 +948,8 @@ ${mdFoodList || '- 尚無紀錄'}
             </div>
           </header>
 
-          {/* 主內容區 */}
+          {/* 主分頁切換 */}
           <main className="max-w-6xl mx-auto px-3 sm:px-4 pt-4">
-            {/* 4 大功能分頁 Tabs */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5 bg-slate-900/70 p-1.5 rounded-xl border border-slate-800">
               <button
                 onClick={() => setActiveTab('diet')}
@@ -937,18 +981,17 @@ ${mdFoodList || '- 尚無紀錄'}
                   activeTab === 'export' ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/40' : 'text-slate-400'
                 }`}
               >
-                📱💻 4. 儲存與手機電腦同步
+                ☁️ 4. Google 試算表同步中心
               </button>
             </div>
 
-            {/* TAB 1: 專屬常備飲食快選 */}
+            {/* TAB 1: 飲食快選 */}
             {activeTab === 'diet' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
                 <div className="lg:col-span-7 space-y-4">
-                  {/* 一鍵常態套餐 */}
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
                     <div className="text-xs font-mono text-emerald-400 mb-2 font-bold">
-                      ⚡ 一鍵帶入常態飲食組合（省時免逐一點選）：
+                      ⚡ 一鍵帶入常態飲食組合：
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       {QUICK_COMBOS.map(combo => (
@@ -964,7 +1007,6 @@ ${mdFoodList || '- 尚無紀錄'}
                     </div>
                   </div>
 
-                  {/* 分類篩選與倍率 */}
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-1.5">
                       {[
@@ -994,9 +1036,9 @@ ${mdFoodList || '- 尚無紀錄'}
                     <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 shrink-0 self-start">
                       {[
                         { val: 0.5, label: '0.5x' },
-                        { val: 1, label: '1x 標準' },
+                        { val: 1, label: '1x' },
                         { val: 1.5, label: '1.5x' },
-                        { val: 2, label: '2x 雙份' }
+                        { val: 2, label: '2x' }
                       ].map(m => (
                         <button
                           key={m.val}
@@ -1011,13 +1053,13 @@ ${mdFoodList || '- 尚無紀錄'}
                     </div>
                   </div>
 
-                  {/* 毛豆顆數微調器 */}
+                  {/* 毛豆微調 */}
                   {(foodCategoryFilter === 'all' || foodCategoryFilter === 'protein') && (
                     <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <div className="text-xs font-bold text-emerald-300">🫛 純毛豆仁（去莢熟重）精準顆數計算器</div>
                         <div className="text-[11px] text-slate-400 mt-0.5 font-mono">
-                          100 顆 (約 85g) = 106 kcal / 11.0g 蛋白質（1 顆 ≈ 0.11g P）
+                          100 顆 (約 85g) = 106 kcal / 11.0g 蛋白質
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -1041,14 +1083,12 @@ ${mdFoodList || '- 尚無紀錄'}
                     </div>
                   )}
 
-                  {/* 食物卡片清單 */}
+                  {/* 食物網格 */}
                   {foodCategoryFilter === 'custom_saved' ? (
                     <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-xs font-mono text-emerald-400 font-bold">
-                          ⭐ 已存檔的自訂常用食品 ({savedCustomFoods.length} 項)
-                        </h3>
-                      </div>
+                      <h3 className="text-xs font-mono text-emerald-400 font-bold">
+                        ⭐ 已存檔的自訂常用食品 ({savedCustomFoods.length} 項)
+                      </h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         {savedCustomFoods.map(item => (
                           <div key={item.id} className="flex flex-col justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
@@ -1095,7 +1135,7 @@ ${mdFoodList || '- 尚無紀錄'}
                                 </span>
                                 {count > 0 && (
                                   <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                                    今日已點 ×{Number(count.toFixed(1))}
+                                    已點 ×{Number(count.toFixed(1))}
                                   </span>
                                 )}
                               </div>
@@ -1152,11 +1192,11 @@ ${mdFoodList || '- 尚無紀錄'}
                     </div>
                   )}
 
-                  {/* 手動輸入營養標示區 */}
+                  {/* 手動輸入 */}
                   <form onSubmit={handleAddCustomFood} className="bg-slate-900 border border-emerald-500/30 rounded-xl p-4 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <h3 className="text-xs font-mono text-emerald-400 font-bold">
-                        ➕ 營養標示手動輸入（含蛋白質 P、醣類/碳水 C、脂肪 F 與常用存檔）
+                        ➕ 營養標示手動輸入（含醣類 C 與常用存檔）
                       </h3>
                       <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
                         <input
@@ -1173,7 +1213,7 @@ ${mdFoodList || '- 尚無紀錄'}
                       <input
                         type="text"
                         required
-                        placeholder="品項名稱 (必填)"
+                        placeholder="品項名稱"
                         value={customFood.name}
                         onChange={e => setCustomFood({ ...customFood, name: e.target.value })}
                         className="col-span-2 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs sm:text-sm text-white"
@@ -1222,7 +1262,7 @@ ${mdFoodList || '- 尚無紀錄'}
                         >
                           <option value="0">0 份</option>
                           <option value="0.5">0.5 份</option>
-                          <option value="1">1 份 (1拳頭)</option>
+                          <option value="1">1 份</option>
                           <option value="1.5">1.5 份</option>
                           <option value="2">2 份</option>
                         </select>
@@ -1231,26 +1271,26 @@ ${mdFoodList || '- 尚無紀錄'}
                         type="submit"
                         className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg px-4 py-2 text-xs sm:text-sm"
                       >
-                        ＋ {saveToPresetChecked ? '加入今日紀錄並存為常用' : '加入今日紀錄'}
+                        ＋ 加入今日紀錄
                       </button>
                     </div>
                   </form>
                 </div>
 
-                {/* 右側：即時營養監控 */}
+                {/* 即時監控與缺口 */}
                 <div className="lg:col-span-5 space-y-4">
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 space-y-4">
                     <div className="flex items-center justify-between">
                       <h2 className="text-base font-bold text-white">📊 今日攝取即時監控</h2>
                       <button onClick={() => setFoodLogs([])} className="text-xs text-slate-400 hover:text-rose-400">
-                        清空今日紀錄
+                        清空今日
                       </button>
                     </div>
 
                     <div className="space-y-3">
                       <div>
                         <div className="flex justify-between text-xs font-mono mb-1">
-                          <span className="text-slate-300 font-semibold">🥩 蛋白質 (保肌核心)</span>
+                          <span className="text-slate-300 font-semibold">🥩 蛋白質</span>
                           <span className="text-emerald-400 font-bold">{totals.p.toFixed(1)} / {targets.pMin}–{targets.pMax} g</span>
                         </div>
                         <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
@@ -1260,7 +1300,7 @@ ${mdFoodList || '- 尚無紀錄'}
 
                       <div>
                         <div className="flex justify-between text-xs font-mono mb-1">
-                          <span className="text-slate-300 font-semibold">🔥 總熱量 (赤字控制)</span>
+                          <span className="text-slate-300 font-semibold">🔥 總熱量</span>
                           <span className={totals.kcal > targets.kcalMax ? 'text-rose-400 font-bold' : 'text-amber-300 font-bold'}>
                             {totals.kcal.toFixed(1)} / {targets.kcal} kcal
                           </span>
@@ -1279,7 +1319,7 @@ ${mdFoodList || '- 尚無紀錄'}
                         <tr className="border-b border-slate-800 text-slate-400">
                           <th className="py-2">指標</th>
                           <th className="py-2">今日累計</th>
-                          <th className="py-2">目標範圍</th>
+                          <th className="py-2">目標</th>
                           <th className="py-2 text-right">狀態</th>
                         </tr>
                       </thead>
@@ -1307,17 +1347,16 @@ ${mdFoodList || '- 尚無紀錄'}
 
                     <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
                       <span className="text-xs text-slate-300">
-                        💧 飲水：<strong className="font-mono text-sm text-cyan-300">{waterMl}</strong> / 2500 mL
+                        💧 飲水：<strong className="font-mono text-sm text-cyan-300">{waterMl}</strong> mL
                       </span>
                       <div className="flex items-center gap-1">
                         <button onClick={() => setWaterMl(Math.max(0, waterMl - 300))} className="px-2 py-1 rounded bg-slate-800 text-xs font-mono">-300</button>
-                        <button onClick={() => setWaterMl(waterMl + 300)} className="px-2 py-1 rounded bg-cyan-600/30 border border-cyan-500/40 text-xs font-mono text-cyan-200">+300</button>
-                        <button onClick={() => setWaterMl(waterMl + 500)} className="px-2 py-1 rounded bg-cyan-600/30 border border-cyan-500/40 text-xs font-mono text-cyan-200">+500</button>
+                        <button onClick={() => setWaterMl(waterMl + 300)} className="px-2 py-1 rounded bg-cyan-600/30 text-cyan-200 border border-cyan-500/40 text-xs font-mono">+300</button>
+                        <button onClick={() => setWaterMl(waterMl + 500)} className="px-2 py-1 rounded bg-cyan-600/30 text-cyan-200 border border-cyan-500/40 text-xs font-mono">+500</button>
                       </div>
                     </div>
                   </div>
 
-                  {/* 蛋白質缺口直接換算 */}
                   <div className="bg-slate-900 border border-emerald-500/30 rounded-xl p-4 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-mono text-emerald-400 font-bold">
@@ -1351,11 +1390,8 @@ ${mdFoodList || '- 尚無紀錄'}
                     )}
                   </div>
 
-                  {/* 今日已入帳明細 */}
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-                    <div className="flex items-center justify-between mb-2.5">
-                      <h3 className="text-xs font-mono text-slate-400">今日已入帳明細 ({foodLogs.length} 筆)</h3>
-                    </div>
+                    <h3 className="text-xs font-mono text-slate-400 mb-2">今日已入帳明細 ({foodLogs.length} 筆)</h3>
                     <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
                       {foodLogs.map(item => (
                         <div key={item.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-xs">
@@ -1374,14 +1410,14 @@ ${mdFoodList || '- 尚無紀錄'}
               </div>
             )}
 
-            {/* TAB 2: 雙軌體重與 70kg 目標 */}
+            {/* TAB 2: 雙軌體重 */}
             {activeTab === 'weight' && (
               <div className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-slate-900 border border-emerald-500/40 rounded-xl p-4">
                     <div className="text-xs font-mono text-emerald-400">🏠 家中秤量（晨間空腹最新）</div>
                     <div className="text-3xl font-mono font-bold text-white mt-1">{currentHomeWeight.toFixed(1)} kg</div>
-                    <div className="text-xs text-slate-300 mt-1">打破連續三日 74.6 kg 平台，單日 −0.4 kg！</div>
+                    <div className="text-xs text-slate-300 mt-1">打破 10/31–11/02 鎖死 74.6 kg 平台，單日 −0.4 kg！</div>
                   </div>
                   <div className="bg-slate-900 border border-cyan-500/40 rounded-xl p-4">
                     <div className="text-xs font-mono text-cyan-400">🎯 距離「家中空腹 70.0 kg」目標</div>
@@ -1397,7 +1433,7 @@ ${mdFoodList || '- 尚無紀錄'}
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
                   <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-                    <h3 className="text-base font-bold text-white">🏠 家中晨間空腹體重紀錄（手機/電腦皆可新增）</h3>
+                    <h3 className="text-base font-bold text-white">🏠 家中晨間空腹體重紀錄</h3>
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse text-xs font-mono">
                         <thead>
@@ -1475,7 +1511,7 @@ ${mdFoodList || '- 尚無紀錄'}
                   </div>
                 </div>
 
-                {/* SVG 曲線圖 */}
+                {/* SVG 里程碑曲線 */}
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                     <h2 className="text-sm sm:text-base font-bold text-white">📈 10/17 (75.0kg) → 12/21 (70.0kg) 里程碑推進曲線</h2>
@@ -1533,7 +1569,7 @@ ${mdFoodList || '- 尚無紀錄'}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
                   <div>
                     <h2 className="text-base sm:text-lg font-bold text-white">{currentDayObj.label}：{currentDayObj.workoutTitle}</h2>
-                    <p className="text-xs text-slate-400 mt-0.5">週三機械式重訓只要第 3 組標準完成 12 下，下週強制加重 +2.5~5 kg！</p>
+                    <p className="text-xs text-slate-400 mt-0.5">機械式重訓第 3 組若完成 12 下，下週強制加重 +2.5~5 kg！</p>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(dId => {
@@ -1615,90 +1651,90 @@ ${mdFoodList || '- 尚無紀錄'}
               </div>
             )}
 
-            {/* TAB 4: 跨裝置儲存與手機/電腦無縫同步中心 */}
+            {/* TAB 4: Google 試算表雲端同步中心 */}
             {activeTab === 'export' && (
               <div className="space-y-5">
-                {/* 跨裝置（手機 ⇄ 電腦）互傳教學與按鈕卡 */}
-                <div className="bg-slate-900 border border-cyan-500/40 rounded-xl p-5 space-y-4">
-                  <div>
-                    <h2 className="text-base font-bold text-cyan-300 flex items-center gap-2">
-                      📱💻 手機 ⇄ 電腦 跨裝置無縫更新與檔案備份
-                    </h2>
-                    <p className="text-xs text-slate-300 mt-1">
-                      不需安裝任何軟體！在電腦更新後，可點選「下載 .JSON 進度備份檔」或「複製跨裝置同步碼」傳到 LINE / Google 雲端硬碟；在手機打開網頁後點選「讀取進度檔」或貼上同步碼，兩邊資料即刻 100% 同步！
-                    </p>
+                {/* 雲端試算表狀態卡 */}
+                <div className="bg-slate-900 border border-emerald-500/40 rounded-xl p-5 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                    <div>
+                      <h2 className="text-base font-bold text-white flex items-center gap-2">
+                        ☁️ Google 試算表自動同步與歷史做表中心
+                      </h2>
+                      <p className="text-xs text-slate-300 mt-1">
+                        已綁定你的專屬 Google Apps Script API。在手機或電腦點擊「同步至試算表」，今日數據即刻寫入試算表下一列。
+                      </p>
+                    </div>
+                    <button
+                      onClick={pushToGoogleSheet}
+                      disabled={isSyncing}
+                      className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm shadow-md"
+                    >
+                      {isSyncing ? '正在傳送至 Google 試算表...' : '☁️ 立即同步至 Google 試算表'}
+                    </button>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* 方式 A：檔案備份與讀取 */}
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
-                      <div className="text-xs font-bold text-emerald-400">方法 A：使用進度檔案 (.json) 儲存與互傳</div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={exportBackupJsonFile}
-                          className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
-                        >
-                          📤 1. 下載目前進度檔 (.json)
-                        </button>
-                        <button
-                          onClick={() => fileInputRef.current?.click()}
-                          className="px-3.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs"
-                        >
-                          📥 2. 讀取進度檔 (.json) 更新本機
-                        </button>
-                      </div>
+                  {/* 試算表歷史即時清單 */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-mono text-emerald-400 font-bold">
+                        📋 雲端試算表現有紀錄清單 ({cloudHistoryList.length} 列)
+                      </span>
+                      <button onClick={fetchFromGoogleSheet} className="text-xs text-slate-400 hover:text-white">
+                        🔄 重新載入雲端
+                      </button>
                     </div>
 
-                    {/* 方式 B：免傳檔案！LINE 同步碼複製貼上 */}
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2.5">
-                      <div className="text-xs font-bold text-cyan-400">方法 B：免傳檔案！一鍵複製「跨裝置同步碼」貼到 LINE</div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => copyTextSafe(JSON.stringify(currentFullState), '✅ 已複製跨裝置同步碼！可貼到 LINE')}
-                          className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shrink-0"
-                        >
-                          📋 複製目前同步碼
-                        </button>
-                        <input
-                          type="text"
-                          placeholder="在此貼上另一台裝置的同步碼..."
-                          value={syncCodeInput}
-                          onChange={e => setSyncCodeInput(e.target.value)}
-                          className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white"
-                        />
-                        <button
-                          onClick={() => {
-                            try {
-                              applyImportedState(JSON.parse(syncCodeInput));
-                              setSyncCodeInput('');
-                            } catch (e) {
-                              alert('同步碼格式不正確，請確認完整複製！');
-                            }
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold text-xs shrink-0"
-                        >
-                          載入
-                        </button>
+                    {cloudHistoryList.length === 0 ? (
+                      <p className="text-xs text-slate-500 py-3 text-center">試算表尚無資料，請點擊上方按鈕送出第一筆今日紀錄</p>
+                    ) : (
+                      <div className="overflow-x-auto max-h-56 overflow-y-auto border border-slate-800 rounded-lg">
+                        <table className="w-full text-left text-xs font-mono">
+                          <thead className="bg-slate-950 text-slate-400 sticky top-0">
+                            <tr className="border-b border-slate-800">
+                              <th className="py-2 px-2.5">記錄時間</th>
+                              <th className="py-2 px-2.5">日期</th>
+                              <th className="py-2 px-2.5">空腹體重</th>
+                              <th className="py-2 px-2.5">熱量</th>
+                              <th className="py-2 px-2.5">蛋白質 (P)</th>
+                              <th className="py-2 px-2.5">碳水 (C)</th>
+                              <th className="py-2 px-2.5">脂肪 (F)</th>
+                              <th className="py-2 px-2.5">步數</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/60 bg-slate-950/60">
+                            {cloudHistoryList.map((row, idx) => (
+                              <tr key={idx} className="hover:bg-slate-800/30">
+                                <td className="py-2 px-2.5 text-slate-400">{String(row.timestamp || '').slice(0, 16)}</td>
+                                <td className="py-2 px-2.5 text-slate-200">{row.date}</td>
+                                <td className="py-2 px-2.5 text-emerald-400 font-bold">{row.weight} kg</td>
+                                <td className="py-2 px-2.5 text-amber-300">{row.kcal} kcal</td>
+                                <td className="py-2 px-2.5 text-emerald-300">{row.protein} g</td>
+                                <td className="py-2 px-2.5 text-cyan-300">{row.carbs} g</td>
+                                <td className="py-2 px-2.5 text-slate-300">{row.fat} g</td>
+                                <td className="py-2 px-2.5 text-slate-400">{row.steps}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
 
-                {/* 日報匯出 (.TXT / .CSV / .MD) */}
+                {/* 備援：檔案匯出與純文字日報 */}
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-                    <div>
-                      <h3 className="text-base font-bold text-white">📄 減脂日報匯出 (.TXT 記事本 / .CSV Excel / .MD)</h3>
-                    </div>
+                    <h3 className="text-base font-bold text-white">📄 本機日報匯出 (.TXT 記事本 / .CSV / .MD)</h3>
                     <div className="flex flex-wrap gap-2">
                       <button onClick={() => downloadFile('txt')} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold">
-                        下載 .TXT 純文字
+                        下載 .TXT
                       </button>
                       <button onClick={() => downloadFile('csv')} className="px-3 py-1.5 rounded-lg bg-cyan-600 text-white text-xs font-bold">
-                        下載 .CSV 試算表
+                        下載 .CSV
                       </button>
                       <button onClick={() => copyTextSafe(activeExportText, '✅ 已複製日報內容！')} className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs font-bold">
-                        {copied ? '✅ 已複製！' : '📋 複製下方報告'}
+                        {copied ? '✅ 已複製！' : '📋 複製日報'}
                       </button>
                     </div>
                   </div>
@@ -1706,8 +1742,8 @@ ${mdFoodList || '- 尚無紀錄'}
                   <div className="flex gap-2 text-xs">
                     {[
                       { id: 'txt', label: '📄 .TXT 純文字' },
-                      { id: 'csv', label: '📊 .CSV Excel 表格' },
-                      { id: 'md', label: '📝 .MD 筆記格式' }
+                      { id: 'csv', label: '📊 .CSV 試算表' },
+                      { id: 'md', label: '📝 .MD 筆記' }
                     ].map(fmt => (
                       <button
                         key={fmt.id}
@@ -1729,7 +1765,7 @@ ${mdFoodList || '- 尚無紀錄'}
             )}
           </main>
 
-          {/* 固定底部狀態列 */}
+          {/* 底部狀態列 */}
           <footer className="fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur border-t border-emerald-500/30 px-3 sm:px-4 py-2.5 shadow-2xl">
             <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-100 truncate">
