@@ -1,0 +1,1756 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Matt 個人減脂與高蛋白精準決策引擎 v3.2</title>
+  <!-- 載入 Tailwind CSS 與 React 核心 (CDN 免安裝) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body {
+      background-color: #020617;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* 隱藏手機橫向捲軸但保留滑動功能 */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo, useEffect, useRef } = React;
+
+    // --- 版本與日期資訊 ---
+    const APP_VERSION = 'v3.2 (跨裝置免安裝版)';
+    const APP_DATE = '2026-11-03';
+    const GOAL_TITLE = '家中晨間空腹 70.0 kg';
+    const STORAGE_KEY = 'matt_fatloss_engine_v3_state';
+
+    // --- Matt 專屬常備食物與飲品資料庫 ---
+    const MATT_CORE_FOODS = [
+      // 1. 高蛋白主力
+      { id: 'mp1', category: 'protein', catLabel: '🥩 高蛋白主力', name: '去皮雞胸肉（熟重）', unit: '1 個手掌大 (120–130g)', kcal: 155, p: 31.0, f: 2.0, c: 0, veg: 0, note: '高純度白肉，BCAA 豐富' },
+      { id: 'mp2', category: 'protein', catLabel: '🥩 高蛋白主力', name: '大豆分離蛋白粉', unit: '1 匙 (約 30g)', kcal: 120, p: 27.0, f: 0.5, c: 1.5, veg: 0, note: '植物性完全蛋白，快速補足缺口' },
+      { id: 'mp3', category: 'protein', catLabel: '🥩 高蛋白主力', name: '高蛋白乳飲品（上友）', unit: '1 瓶 (300mL 實標)', kcal: 148.8, p: 22.2, f: 2.8, c: 8.7, veg: 0, note: 'BCAA 3,957 mg' },
+      { id: 'mp4', category: 'protein', catLabel: '🥩 高蛋白主力', name: '純毛豆仁（去莢熟重）', unit: '100 顆 (約 85g)', kcal: 106, p: 11.0, f: 4.5, c: 6.5, veg: 0.5, note: '高鉀排鈉、1 顆 ≈ 0.11g 蛋白' },
+      { id: 'mp5', category: 'protein', catLabel: '🥩 高蛋白主力', name: '茶葉蛋 (1顆)', unit: '1 顆 (約 50g)', kcal: 75, p: 6.5, f: 5.0, c: 1.0, veg: 0, note: '全蛋完全蛋白、卵磷脂' },
+      { id: 'mp6', category: 'protein', catLabel: '🥩 高蛋白主力', name: '茶葉蛋 (2顆組合)', unit: '2 顆 (約 100g)', kcal: 145, p: 13.0, f: 9.5, c: 2.0, veg: 0, note: '晨間／下午常態補給點心' },
+      { id: 'mp7', category: 'protein', catLabel: '🥩 高蛋白主力', name: '滴雞精／熬雞精', unit: '1 包 (實標)', kcal: 15.6, p: 3.9, f: 0, c: 0, veg: 0, note: '小分子游離胜肽，極速吸收' },
+
+      // 2. 蔬菜與菌菇
+      { id: 'mv1', category: 'veg', catLabel: '🥦 蔬菜與菌菇', name: '青花菜 ＋ 美生菜', unit: '各大半碗 (熟重約 150g)', kcal: 45, p: 3.5, f: 0.4, c: 7.5, veg: 1.5, note: '高鉀高纖、蘿蔔硫素抗炎' },
+      { id: 'mv2', category: 'veg', catLabel: '🥦 蔬菜與菌菇', name: '杏鮑菇', unit: '約半碗 (約 80g)', kcal: 30, p: 2.5, f: 0.3, c: 5.0, veg: 1.0, note: '多醣體、高纖飽足' },
+
+      // 3. 晨間與代謝飲品
+      { id: 'md1', category: 'drink', catLabel: '🍵 晨間與代謝飲品', name: '大麥若葉青汁', unit: '1 包 (約 3g 沖泡)', kcal: 10, p: 0.8, f: 0.1, c: 1.5, veg: 0.3, note: '高鉀排鈉、活性葉綠素消腫' },
+      { id: 'md2', category: 'drink', catLabel: '🍵 晨間與代謝飲品', name: '無糖黑咖啡', unit: '1 杯 (250–300mL)', kcal: 10, p: 0.5, f: 0, c: 2.0, veg: 0, note: '咖啡因、綠原酸提升代謝' },
+      { id: 'md3', category: 'drink', catLabel: '🍵 晨間與代謝飲品', name: '無糖玉米鬚茶', unit: '1 杯/瓶 (350–500mL)', kcal: 0, p: 0.0, f: 0, c: 0, veg: 0, note: '超高鉀離子利水排鈉、零熱量' },
+
+      // 4. 碳水與微調飲品
+      { id: 'mc1', category: 'carb', catLabel: '🌾 碳水與微調飲品', name: '蘿蔔糕（乾煎無多油）', unit: '1 小片 (手指大 25–30g)', kcal: 45, p: 0.8, f: 1.2, c: 7.8, veg: 0, note: '在地米漿碳水' },
+      { id: 'mc2', category: 'carb', catLabel: '🌾 碳水與微調飲品', name: '堅果升級版雙和茶', unit: '1 包 (15–18g 沖泡)', kcal: 70, p: 0.8, f: 3.5, c: 9.0, veg: 0, note: '肉桂當歸溫陽活血，含杏仁核桃' },
+      { id: 'mc3', category: 'carb', catLabel: '🌾 碳水與微調飲品', name: '蜂蜜綠茶（少蜂蜜）', unit: '1 杯 (約 500mL)', kcal: 80, p: 0.0, f: 0, c: 20.0, veg: 0, note: '兒茶素抗氧化，含微量果糖' },
+      { id: 'mc4', category: 'carb', catLabel: '🌾 碳水與微調飲品', name: '粉角（手搖配料）', unit: '半份～一份 (40–50g)', kcal: 95, p: 0.2, f: 0, c: 23.5, veg: 0, note: '樹薯粉質地，咀嚼滿足感' },
+
+      // 5. 水果點心
+      { id: 'mf1', category: 'fruit', catLabel: '🍊 水果點心', name: '香吉士', unit: '半個 (果肉 60–70g)', kcal: 32, p: 0.6, f: 0.1, c: 7.8, veg: 0, note: '天然維生素 C、柑橘生物類黃酮' },
+      { id: 'mf2', category: 'fruit', catLabel: '🍊 水果點心', name: '鮮榨柳橙汁', unit: '70 mL (純原汁無加糖)', kcal: 32, p: 0.5, f: 0.1, c: 7.6, veg: 0, note: '微量鉀與抗氧化植化素' },
+    ];
+
+    const QUICK_COMBOS = [
+      { id: 'combo_morning', title: '☀️ 晨間代謝消腫組', desc: '青汁 + 黑咖啡 + 茶葉蛋2顆 + 滴雞精', items: ['md1', 'md2', 'mp6', 'mp7'] },
+      { id: 'combo_protein_veg', title: '💪 高蛋白主力餐', desc: '去皮雞胸肉 + 青花菜&美生菜 + 杏鮑菇 + 玉米鬚茶', items: ['mp1', 'mv1', 'mv2', 'md3'] },
+      { id: 'combo_afternoon', title: '⚡ 午後精準補給組', desc: '上友高蛋白乳 + 純毛豆仁100顆 + 香吉士半個', items: ['mp3', 'mp4', 'mf1'] }
+    ];
+
+    const COMPANY_WEIGHT_LOGS = [
+      { date: '07/01', weight: 81.2, change: '基準點', note: '公司基準起始點' },
+      { date: '07/14', weight: 81.2, change: '0.0 kg', note: '持平適應期' },
+      { date: '08/03', weight: 80.2, change: '−1.0 kg', note: '穩定啟動' },
+      { date: '09/01', weight: 77.6, change: '−2.6 kg', note: '大幅突破' },
+      { date: '10/02', weight: 76.3, change: '−1.3 kg', note: '持續下降' },
+      { date: '11/02', weight: 75.1, change: '−1.2 kg', note: '累計自 7/1 總減重 −6.1 kg' },
+    ];
+
+    const INITIAL_HOME_WEIGHT_LOGS = [
+      { date: '10/17', weight: 75.0, change: '基準點', note: '減脂計畫啟動基準' },
+      { date: '10/31', weight: 74.6, change: '−0.4 kg', note: '首次進入 74 字頭' },
+      { date: '11/01', weight: 74.6, change: '0.0 kg', note: '持平' },
+      { date: '11/02', weight: 74.6, change: '0.0 kg', note: '連續三日鎖死 74.6 kg' },
+      { date: '11/03', weight: 74.2, change: '−0.4 kg', note: '今日突破！單日 −0.4 kg' },
+    ];
+
+    const MILESTONES = [
+      { id: '10/17', date: '10/17 (起點)', weight: 75.0 },
+      { id: '11/01', date: '11/01', weight: 74.6 },
+      { id: '11/03', date: '11/03 (今日)', weight: 74.2 },
+      { id: '11/08', date: '11/08', weight: 73.4 },
+      { id: '11/15', date: '11/15', weight: 72.9 },
+      { id: '11/22', date: '11/22', weight: 72.3 },
+      { id: '11/29', date: '11/29 (韓國行)', weight: 71.8 },
+      { id: '12/06', date: '12/06', weight: 71.2 },
+      { id: '12/13', date: '12/13', weight: 70.6 },
+      { id: '12/21', date: '12/21 (終點)', weight: 70.0 },
+    ];
+
+    const DAYS_OF_WEEK = [
+      { id: 'Mon', label: '週一', type: 'weekday', workoutTitle: '徒手＋彈力帶（全身 A）' },
+      { id: 'Tue', label: '週二', type: 'weekday', workoutTitle: '快走 40 分鐘 (今日 11/03)' },
+      { id: 'Wed', label: '週三', type: 'weekday', workoutTitle: '機械重訓（全身）' },
+      { id: 'Thu', label: '週四', type: 'weekday', workoutTitle: '快走 40 分鐘' },
+      { id: 'Fri', label: '週五', type: 'weekday', workoutTitle: '徒手＋彈力帶（全身 B）' },
+      { id: 'Sat', label: '週六', type: 'weekend', workoutTitle: '休息或散步（外食日多走路）' },
+      { id: 'Sun', label: '週日', type: 'weekend', workoutTitle: '休息（執行週檢討）' },
+    ];
+
+    const HAND_PORTION_GUIDE = [
+      { unit: '🖐️ 1 個手掌心', desc: '不含手指，厚度約小指厚（約 120g 熟肉）', target: '去皮雞胸肉、便當主菜、火鍋肉片 5–6 片', macro: '約 24–31g 蛋白質' },
+      { unit: '✌️ 2 根手指大', desc: '食指+中指併攏大小與厚度（約 30–40g）', target: '乾煎蘿蔔糕1小片、燒肉片2片、滷味肉片', macro: '肉約 6–8g P / 蘿蔔糕 45 kcal' },
+      { unit: '✊ 1 個拳頭大', desc: '握拳大小（約半碗至 8 分滿 / 80–150g）', target: '青花菜+美生菜、杏鮑菇、純毛豆仁100顆', macro: '蔬菜計 1–1.5 份 / 飯約 31g C' },
+      { unit: '👍 1 個大拇指', desc: '整個大拇指大小（約 1 湯匙 / 10–15g）', target: '沙茶/胡麻沾醬、堅果、炸物吸油量', macro: '隱藏油脂約 10g (90 kcal)' },
+    ];
+
+    const OUTING_PRESETS = [
+      { id: 'op1', name: '🖐️ 外食低脂手掌 (里肌/鯛魚/白蝦7隻)', kcal: 140, p: 24, f: 3, c: 0, veg: 0 },
+      { id: 'op2', name: '🖐️ 外食中脂手掌 (去皮雞腿/牛板腱/鮭魚/豆腐)', kcal: 210, p: 21, f: 13, c: 1, veg: 0 },
+      { id: 'op3', name: '🖐️ 外食高脂手掌 ⚠️ (炸排骨/五花/松阪豬/和牛)', kcal: 330, p: 17, f: 26, c: 8, veg: 0 },
+      { id: 'op4', name: '✊ 1拳頭 熟白飯/糙米/地瓜 (約半碗100g)', kcal: 140, p: 3, f: 0.5, c: 31, veg: 0 },
+      { id: 'op5', name: '✊ 1拳頭 外食燙青菜 (約半碗)', kcal: 35, p: 1.5, f: 0.5, c: 6, veg: 1 },
+      { id: 'op6', name: '👍 1大拇指 外食沾醬/油脂 (沙茶/胡麻/堅果)', kcal: 90, p: 1, f: 10, c: 1, veg: 0 },
+    ];
+
+    const WORKOUT_SCHEMAS = {
+      Mon: [
+        { id: 'm1', name: '標準伏地挺身', sets: '3組', target: '8-15下', note: '核心收緊，不塌腰', isMachine: false },
+        { id: 'm2', name: '自重深蹲', sets: '3組', target: '15-20下', note: '膝蓋朝腳尖方向', isMachine: false },
+        { id: 'm3', name: '彈力帶坐姿划船', sets: '3組', target: '12-15下', note: '肩胛骨後收夾緊', isMachine: false },
+        { id: 'm4', name: '彈力帶肩推', sets: '3組', target: '10-12下', note: '不聳肩', isMachine: false },
+        { id: 'm5', name: '棒式 (Plank)', sets: '3組', target: '45-60秒', note: '維持呼吸穩定', isMachine: false },
+      ],
+      Tue: [
+        { id: 'tu1', name: '戶外/跑步機快走', sets: '1次', target: '40分鐘', note: '微喘可講話強度 (Zone 2)', isMachine: false },
+        { id: 'tu2', name: '全日步數累積', sets: '全日', target: '≥ 8,000步', note: '含快走步數，加速排鈉消水腫', isMachine: false },
+      ],
+      Wed: [
+        { id: 'w1', name: '機械腿推 (Leg Press)', sets: '3組', target: '8-12下', note: '滿12下隔週加重', isMachine: true },
+        { id: 'w2', name: '坐姿機械划船 (Seated Row)', sets: '3組', target: '8-12下', note: '感受闊背肌發力', isMachine: true },
+        { id: 'w3', name: '機械胸推 (Chest Press)', sets: '3組', target: '8-12下', note: '沉肩推起', isMachine: true },
+        { id: 'w4', name: '滑輪下拉 (Lat Pulldown)', sets: '3組', target: '8-12下', note: '拉至上胸位置', isMachine: true },
+        { id: 'w5', name: '機械腿彎舉 (Leg Curl)', sets: '3組', target: '8-12下', note: '控制離心速度', isMachine: true },
+      ],
+      Thu: [
+        { id: 'th1', name: '戶外/跑步機快走', sets: '1次', target: '40分鐘', note: '微喘可講話強度 (Zone 2)', isMachine: false },
+        { id: 'th2', name: '全日步數累積', sets: '全日', target: '≥ 8,000步', note: '含快走步數', isMachine: false },
+      ],
+      Fri: [
+        { id: 'f1', name: '保加利亞分腿蹲 / 弓箭步', sets: '3組/邊', target: '10-12下', note: '重心在前腳跟', isMachine: false },
+        { id: 'f2', name: '窄距伏地挺身', sets: '3組', target: '8-12下', note: '強化三頭與內胸', isMachine: false },
+        { id: 'f3', name: '彈力帶羅馬尼亞硬舉 (RDL)', sets: '3組', target: '12-15下', note: '髖鉸鏈主導，屁股後推', isMachine: false },
+        { id: 'f4', name: '彈力帶面拉 (Face Pull)', sets: '3組', target: '15下', note: '強化後三角與旋轉肌袖', isMachine: false },
+        { id: 'f5', name: '死蟲式 (Deadbug)', sets: '3組', target: '10下/邊', note: '下背緊貼地面', isMachine: false },
+      ],
+      Sat: [
+        { id: 'sa1', name: '外食日散步補償', sets: '全日', target: '≥ 8,000步', note: '燒肉/聚餐後多走路幫助血糖穩定', isMachine: false },
+      ],
+      Sun: [
+        { id: 'su1', name: '主動恢復與伸展', sets: '1次', target: '15分鐘', note: '滾筒放鬆、執行週報數據檢討', isMachine: false },
+      ]
+    };
+
+    const DEFAULT_STATE = {
+      selectedDay: 'Tue',
+      selectedMilestone: '11/08',
+      modeOverride: null,
+      portionMultiplier: 1,
+      edamameCount: 100,
+      savedCustomFoods: [
+        { id: 'sc1', name: '超商無糖豆漿 (450mL)', unit: '1 瓶 (自訂常用)', kcal: 147, p: 15.3, f: 7.2, c: 5.4, veg: 0 },
+        { id: 'sc2', name: '烤地瓜 (中型)', unit: '1 顆 (自訂常用)', kcal: 140, p: 2.0, f: 0.3, c: 32.0, veg: 0 }
+      ],
+      foodLogs: [
+        { id: 101, refId: 'md1', name: '大麥若葉青汁', unit: '1 包', kcal: 10, p: 0.8, f: 0.1, c: 1.5, veg: 0.3 },
+        { id: 102, refId: 'md2', name: '無糖黑咖啡', unit: '1 杯', kcal: 10, p: 0.5, f: 0, c: 2.0, veg: 0 },
+        { id: 103, refId: 'mp6', name: '茶葉蛋 (2顆組合)', unit: '2 顆', kcal: 145, p: 13.0, f: 9.5, c: 2.0, veg: 0 },
+        { id: 104, refId: 'mp1', name: '去皮雞胸肉（熟重）', unit: '1 個手掌大', kcal: 155, p: 31.0, f: 2.0, c: 0, veg: 0 },
+        { id: 105, refId: 'mp3', name: '高蛋白乳飲品（上友）', unit: '1 瓶 (300mL)', kcal: 148.8, p: 22.2, f: 2.8, c: 8.7, veg: 0 },
+        { id: 106, refId: 'mv1', name: '青花菜 ＋ 美生菜', unit: '各大半碗', kcal: 45, p: 3.5, f: 0.4, c: 7.5, veg: 1.5 },
+        { id: 107, refId: 'md3', name: '無糖玉米鬚茶', unit: '1 瓶', kcal: 0, p: 0, f: 0, c: 0, veg: 0 },
+      ],
+      waterMl: 2000,
+      workoutLogs: {
+        tu1: { weight: '', reps: '40', done: true },
+        tu2: { weight: '', reps: '8200', done: false },
+        w1: { weight: '80', reps: '12', done: true },
+        w2: { weight: '45', reps: '10', done: true },
+        w3: { weight: '40', reps: '12', done: false },
+        w4: { weight: '45', reps: '10', done: false },
+        w5: { weight: '35', reps: '11', done: false },
+      },
+      dailySteps: 7500,
+      currentHomeWeight: 74.2,
+      homeWeightLogs: INITIAL_HOME_WEIGHT_LOGS,
+      weeklyWeights: ['74.6', '74.2', '', '', '', '', ''],
+      lastWeekAvg: '74.6',
+      weeklyWorkoutsDone: 3,
+      weeklyAvgSteps: 8200,
+      fatigueLevel: 2,
+      isTwoWeeksStuck: false,
+      isTravelWeek: false,
+      weightHistory: [
+        { id: '10/17', avgWeight: 75.0, steps: 7500, note: '減脂計畫啟動基準' },
+        { id: '11/01', avgWeight: 74.6, steps: 8100, note: '進入 74 字頭' },
+        { id: '11/03', avgWeight: 74.2, steps: 8200, note: '破平台單日 −0.4kg' },
+      ]
+    };
+
+    function App() {
+      const fileInputRef = useRef(null);
+
+      const loadSaved = () => {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return DEFAULT_STATE;
+          return { ...DEFAULT_STATE, ...JSON.parse(raw) };
+        } catch (e) {
+          return DEFAULT_STATE;
+        }
+      };
+
+      const initial = useMemo(() => loadSaved(), []);
+
+      const [activeTab, setActiveTab] = useState('diet');
+      const [foodCategoryFilter, setFoodCategoryFilter] = useState('all');
+      const [selectedDay, setSelectedDay] = useState(initial.selectedDay);
+      const [selectedMilestone, setSelectedMilestone] = useState(initial.selectedMilestone);
+      const [modeOverride, setModeOverride] = useState(initial.modeOverride);
+      const [portionMultiplier, setPortionMultiplier] = useState(initial.portionMultiplier || 1);
+      const [edamameCount, setEdamameCount] = useState(initial.edamameCount || 100);
+      const [showHandGuide, setShowHandGuide] = useState(false);
+
+      const [foodLogs, setFoodLogs] = useState(initial.foodLogs);
+      const [savedCustomFoods, setSavedCustomFoods] = useState(initial.savedCustomFoods || DEFAULT_STATE.savedCustomFoods);
+      const [waterMl, setWaterMl] = useState(initial.waterMl);
+      const [customFood, setCustomFood] = useState({ name: '', kcal: '', p: '', f: '', c: '', veg: '0' });
+      const [saveToPresetChecked, setSaveToPresetChecked] = useState(true);
+
+      const [currentHomeWeight, setCurrentHomeWeight] = useState(initial.currentHomeWeight || 74.2);
+      const [homeWeightLogs, setHomeWeightLogs] = useState(initial.homeWeightLogs || INITIAL_HOME_WEIGHT_LOGS);
+      const [newWeightInput, setNewWeightInput] = useState({ date: '11/04', weight: '', note: '' });
+      const [weeklyWeights, setWeeklyWeights] = useState(initial.weeklyWeights);
+      const [lastWeekAvg, setLastWeekAvg] = useState(initial.lastWeekAvg);
+      const [weeklyWorkoutsDone, setWeeklyWorkoutsDone] = useState(initial.weeklyWorkoutsDone);
+      const [weeklyAvgSteps, setWeeklyAvgSteps] = useState(initial.weeklyAvgSteps);
+      const [fatigueLevel, setFatigueLevel] = useState(initial.fatigueLevel);
+      const [isTwoWeeksStuck, setIsTwoWeeksStuck] = useState(initial.isTwoWeeksStuck);
+      const [isTravelWeek, setIsTravelWeek] = useState(initial.isTravelWeek);
+      const [weightHistory, setWeightHistory] = useState(initial.weightHistory);
+
+      const [workoutLogs, setWorkoutLogs] = useState(initial.workoutLogs);
+      const [dailySteps, setDailySteps] = useState(initial.dailySteps);
+
+      const [exportFormat, setExportFormat] = useState('txt');
+      const [copied, setCopied] = useState(false);
+      const [downloadedNotice, setDownloadedNotice] = useState('');
+      const [syncCodeInput, setSyncCodeInput] = useState('');
+      const [lastSavedTime, setLastSavedTime] = useState('已同步');
+      const [confirmReset, setConfirmReset] = useState(false);
+
+      // 封裝完整狀態物件
+      const currentFullState = useMemo(() => ({
+        selectedDay, selectedMilestone, modeOverride, portionMultiplier, edamameCount,
+        savedCustomFoods, foodLogs, waterMl, workoutLogs, dailySteps, currentHomeWeight,
+        homeWeightLogs, weeklyWeights, lastWeekAvg, weeklyWorkoutsDone, weeklyAvgSteps,
+        fatigueLevel, isTwoWeeksStuck, isTravelWeek, weightHistory
+      }), [
+        selectedDay, selectedMilestone, modeOverride, portionMultiplier, edamameCount,
+        savedCustomFoods, foodLogs, waterMl, workoutLogs, dailySteps, currentHomeWeight,
+        homeWeightLogs, weeklyWeights, lastWeekAvg, weeklyWorkoutsDone, weeklyAvgSteps,
+        fatigueLevel, isTwoWeeksStuck, isTravelWeek, weightHistory
+      ]);
+
+      // 自動同步至 LocalStorage
+      useEffect(() => {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(currentFullState));
+          const now = new Date();
+          setLastSavedTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
+        } catch (e) {
+          setLastSavedTime('暫存受限');
+        }
+      }, [currentFullState]);
+
+      // 套用外部匯入的狀態 (手機 ⇄ 電腦互傳)
+      const applyImportedState = (parsed) => {
+        if (!parsed || typeof parsed !== 'object') return;
+        if (parsed.selectedDay) setSelectedDay(parsed.selectedDay);
+        if (parsed.selectedMilestone) setSelectedMilestone(parsed.selectedMilestone);
+        if (parsed.savedCustomFoods) setSavedCustomFoods(parsed.savedCustomFoods);
+        if (parsed.foodLogs) setFoodLogs(parsed.foodLogs);
+        if (typeof parsed.waterMl === 'number') setWaterMl(parsed.waterMl);
+        if (parsed.workoutLogs) setWorkoutLogs(parsed.workoutLogs);
+        if (typeof parsed.dailySteps === 'number') setDailySteps(parsed.dailySteps);
+        if (typeof parsed.currentHomeWeight === 'number') setCurrentHomeWeight(parsed.currentHomeWeight);
+        if (parsed.homeWeightLogs) setHomeWeightLogs(parsed.homeWeightLogs);
+        if (parsed.weightHistory) setWeightHistory(parsed.weightHistory);
+        setDownloadedNotice('✅ 跨裝置進度已成功載入！');
+        setTimeout(() => setDownloadedNotice(''), 3000);
+      };
+
+      // 匯出 .json 跨裝置完整備份檔
+      const exportBackupJsonFile = () => {
+        const jsonStr = JSON.stringify(currentFullState, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Matt_減脂跨裝置進度檔_${APP_DATE}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        setDownloadedNotice('已下載 .JSON 進度檔');
+        setTimeout(() => setDownloadedNotice(''), 2500);
+      };
+
+      // 讀取 .json 跨裝置備份檔
+      const handleImportJsonFile = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const parsed = JSON.parse(evt.target.result);
+            applyImportedState(parsed);
+          } catch (err) {
+            alert('檔案格式錯誤，請確認選擇的是 .json 進度備份檔！');
+          }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+      };
+
+      const handleResetAll = () => {
+        if (!confirmReset) {
+          setConfirmReset(true);
+          setTimeout(() => setConfirmReset(false), 3500);
+          return;
+        }
+        localStorage.removeItem(STORAGE_KEY);
+        applyImportedState(DEFAULT_STATE);
+        setConfirmReset(false);
+      };
+
+      const currentDayObj = DAYS_OF_WEEK.find(d => d.id === selectedDay) || DAYS_OF_WEEK[1];
+      const activeMode = modeOverride || currentDayObj.type;
+      const isWeekday = activeMode === 'weekday';
+
+      const targets = useMemo(() => {
+        if (isWeekday) {
+          return {
+            label: '平日精準控卡模式',
+            kcal: 1650, kcalMin: 1550, kcalMax: 1750,
+            pMin: 130, pMax: 155, fMin: 40, fMax: 55, cMin: 140, cMax: 185,
+            vegMin: 3, waterMin: 2500
+          };
+        } else {
+          return {
+            label: '週末外食彈性模式',
+            kcal: 1850, kcalMin: 1700, kcalMax: 1950,
+            pMin: 125, pMax: 160, fMin: 40, fMax: 65, cMin: 120, cMax: 220,
+            vegMin: 2.5, waterMin: 2500
+          };
+        }
+      }, [isWeekday]);
+
+      const totals = useMemo(() => {
+        return foodLogs.reduce((acc, item) => ({
+          kcal: acc.kcal + Number(item.kcal || 0),
+          p: acc.p + Number(item.p || 0),
+          f: acc.f + Number(item.f || 0),
+          c: acc.c + Number(item.c || 0),
+          veg: acc.veg + Number(item.veg || 0),
+        }), { kcal: 0, p: 0, f: 0, c: 0, veg: 0 });
+      }, [foodLogs]);
+
+      const itemCounts = useMemo(() => {
+        const counts = {};
+        foodLogs.forEach(log => {
+          if (log.refId) counts[log.refId] = (counts[log.refId] || 0) + (log.mult || 1);
+        });
+        return counts;
+      }, [foodLogs]);
+
+      const getStatus = (val, min, max, isStrictMax = false) => {
+        if (val < min) return { text: '待補足', color: 'text-amber-300 bg-amber-950/70 border-amber-700/50' };
+        if (isStrictMax && val > max) return { text: '超標', color: 'text-rose-300 bg-rose-950/70 border-rose-700/50' };
+        if (!isStrictMax && val > max * 1.1) return { text: '偏高', color: 'text-rose-300 bg-rose-950/70 border-rose-700/50' };
+        return { text: '達標', color: 'text-emerald-300 bg-emerald-950/70 border-emerald-700/50' };
+      };
+
+      const smartFoodSuggestions = useMemo(() => {
+        const kcalDiff = Math.round(targets.kcal - totals.kcal);
+        const pDiff = Math.max(0, targets.pMin - totals.p);
+        const vegDiff = Math.max(0, targets.vegMin - totals.veg);
+        const waterDiff = Math.max(0, targets.waterMin - waterMl);
+
+        const chickenNeeded = (pDiff / 31.0).toFixed(1);
+        const soyProteinNeeded = (pDiff / 27.0).toFixed(1);
+        const shangYouNeeded = (pDiff / 22.2).toFixed(1);
+        const edamameGramsOrCount = Math.ceil(pDiff / 0.11);
+
+        const actions = [];
+        if (totals.kcal > targets.kcalMax) {
+          const overKcal = Math.round(totals.kcal - targets.kcal);
+          actions.push(`⚠️ 熱量已超標 ${overKcal} kcal：請停止攝取粉角、蜂蜜綠茶或高脂肉類，多喝「無糖玉米鬚茶」或「大麥若葉青汁」高鉀排鈉。`);
+          if (pDiff > 5) {
+            actions.push(`蛋白質尚缺 ${pDiff.toFixed(1)}g：建議用極低熱量的「滴雞精 (${(pDiff / 3.9).toFixed(0)}包)」或「大豆分離蛋白粉 (${soyProteinNeeded}匙)」純補蛋白質。`);
+          }
+        } else {
+          if (pDiff > 6) {
+            actions.push(`🎯 蛋白質尚缺 ${pDiff.toFixed(1)}g（熱量尚餘 ${kcalDiff} kcal）：建議補充「去皮雞胸肉 ${chickenNeeded} 份」或「大豆分離蛋白 ${soyProteinNeeded} 匙」或「上友高蛋白乳 ${shangYouNeeded} 瓶」（若吃純毛豆仁約需 ${edamameGramsOrCount} 顆）。`);
+          } else {
+            actions.push(`✅ 今日蛋白質已達標 (${totals.p.toFixed(1)}g)！`);
+            if (kcalDiff > 120) {
+              actions.push(`熱量尚有 ${kcalDiff} kcal 餘裕：可享用「乾煎蘿蔔糕 1–2 小片」或「香吉士半個 + 堅果雙和茶 1 包」。`);
+            }
+          }
+        }
+        if (vegDiff > 0) actions.push(`🥦 蔬菜尚缺 ${vegDiff.toFixed(1)} 份：請補「青花菜＋美生菜 1 份」或「杏鮑菇半碗」。`);
+        if (waterDiff > 0) actions.push(`💧 水份尚缺 ${waterDiff} mL。`);
+
+        return {
+          summaryText: actions.join(' '),
+          pDiff, kcalDiff, vegDiff, chickenNeeded, soyProteinNeeded, shangYouNeeded, edamameGramsOrCount
+        };
+      }, [totals, targets, waterMl]);
+
+      const addFoodWithMultiplier = (item, customMult = null) => {
+        const m = customMult !== null ? customMult : portionMultiplier;
+        const suffix = m === 1 ? '' : ` ×${m}`;
+        setFoodLogs(prev => [
+          ...prev,
+          {
+            id: Date.now() + Math.random(),
+            refId: item.id,
+            mult: m,
+            name: `${item.name}${suffix}`,
+            unit: item.unit || '',
+            kcal: Number((item.kcal * m).toFixed(1)),
+            p: Number((item.p * m).toFixed(1)),
+            f: Number(((item.f || 0) * m).toFixed(1)),
+            c: Number(((item.c || 0) * m).toFixed(1)),
+            veg: Number(((item.veg || 0) * m).toFixed(1)),
+          }
+        ]);
+      };
+
+      const removeLastByRefId = (refId) => {
+        setFoodLogs(prev => {
+          const idx = [...prev].reverse().findIndex(x => x.refId === refId);
+          if (idx === -1) return prev;
+          const realIdx = prev.length - 1 - idx;
+          return prev.filter((_, i) => i !== realIdx);
+        });
+      };
+
+      const addCustomEdamame = () => {
+        const count = Number(edamameCount) || 100;
+        const ratio = count / 100;
+        setFoodLogs(prev => [
+          ...prev,
+          {
+            id: Date.now() + Math.random(),
+            refId: 'mp4',
+            mult: Number(ratio.toFixed(2)),
+            name: `純毛豆仁 (${count} 顆 / 約 ${Math.round(85 * ratio)}g)`,
+            unit: `${count} 顆`,
+            kcal: Number((106 * ratio).toFixed(1)),
+            p: Number((11.0 * ratio).toFixed(1)),
+            f: Number((4.5 * ratio).toFixed(1)),
+            c: Number((6.5 * ratio).toFixed(1)),
+            veg: Number((0.5 * ratio).toFixed(1)),
+          }
+        ]);
+      };
+
+      const applyCombo = (combo) => {
+        const newEntries = combo.items.map(refId => {
+          const found = MATT_CORE_FOODS.find(f => f.id === refId);
+          if (!found) return null;
+          return {
+            id: Date.now() + Math.random(),
+            refId: found.id,
+            mult: 1,
+            name: found.name,
+            unit: found.unit,
+            kcal: found.kcal,
+            p: found.p,
+            f: found.f || 0,
+            c: found.c || 0,
+            veg: found.veg || 0,
+          };
+        }).filter(Boolean);
+        setFoodLogs(prev => [...prev, ...newEntries]);
+      };
+
+      const autoCalculatedKcal = useMemo(() => {
+        const p = parseFloat(customFood.p) || 0;
+        const f = parseFloat(customFood.f) || 0;
+        const c = parseFloat(customFood.c) || 0;
+        if (p === 0 && f === 0 && c === 0) return 0;
+        return Math.round(p * 4 + c * 4 + f * 9);
+      }, [customFood.p, customFood.f, customFood.c]);
+
+      const handleAddCustomFood = (e) => {
+        e.preventDefault();
+        if (!customFood.name) return;
+        const finalKcal = customFood.kcal !== '' ? parseFloat(customFood.kcal) : autoCalculatedKcal;
+        const pVal = parseFloat(customFood.p) || 0;
+        const fVal = parseFloat(customFood.f) || 0;
+        const cVal = parseFloat(customFood.c) || 0;
+        const vegVal = parseFloat(customFood.veg) || 0;
+        const newCustomId = `sc_${Date.now()}`;
+
+        if (saveToPresetChecked) {
+          setSavedCustomFoods(prev => [
+            ...prev,
+            { id: newCustomId, name: customFood.name, unit: '1 份 (自訂常用)', kcal: finalKcal, p: pVal, f: fVal, c: cVal, veg: vegVal }
+          ]);
+        }
+
+        setFoodLogs(prev => [
+          ...prev,
+          { id: Date.now() + Math.random(), refId: saveToPresetChecked ? newCustomId : undefined, mult: 1, name: customFood.name, kcal: finalKcal, p: pVal, f: fVal, c: cVal, veg: vegVal }
+        ]);
+        setCustomFood({ name: '', kcal: '', p: '', f: '', c: '', veg: '0' });
+      };
+
+      const deleteSavedCustomFood = (id) => setSavedCustomFoods(prev => prev.filter(item => item.id !== id));
+      const removeFood = (id) => setFoodLogs(prev => prev.filter(item => item.id !== id));
+
+      const handleAddHomeWeightLog = (e) => {
+        e.preventDefault();
+        const w = parseFloat(newWeightInput.weight);
+        if (!newWeightInput.date || isNaN(w) || w <= 0) return;
+        const prevW = homeWeightLogs.length > 0 ? homeWeightLogs[homeWeightLogs.length - 1].weight : 75.0;
+        const diff = w - prevW;
+        const diffStr = diff === 0 ? '持平' : `${diff > 0 ? '+' : '−'}${Math.abs(diff).toFixed(1)} kg`;
+
+        const updated = [
+          ...homeWeightLogs,
+          { date: newWeightInput.date, weight: w, change: diffStr, note: newWeightInput.note || (w < prevW ? '持續突破新低！' : '日常波動觀察') }
+        ];
+        setHomeWeightLogs(updated);
+        setCurrentHomeWeight(w);
+        setNewWeightInput({ date: '', weight: '', note: '' });
+      };
+
+      const weeklyStats = useMemo(() => {
+        const validWeights = weeklyWeights.map(w => parseFloat(w)).filter(w => !isNaN(w) && w > 0);
+        const currentAvg = validWeights.length > 0 ? (validWeights.reduce((a, b) => a + b, 0) / validWeights.length) : currentHomeWeight;
+        const prevAvg = parseFloat(lastWeekAvg) || 74.6;
+        const diff = currentAvg - prevAvg;
+        const lossAmount = prevAvg - currentAvg;
+
+        const milestoneObj = MILESTONES.find(m => m.id === selectedMilestone) || MILESTONES[3];
+        const distToMilestone = currentAvg - milestoneObj.weight;
+
+        const startHomeWeight = 75.0;
+        const targetHomeWeight = 70.0;
+        const totalToLose = startHomeWeight - targetHomeWeight;
+        const lostSoFar = startHomeWeight - currentHomeWeight;
+        const remainingToGoal = Math.max(0, currentHomeWeight - targetHomeWeight);
+        const progressPct = Math.min(100, Math.max(0, (lostSoFar / totalToLose) * 100));
+        const totalLostSinceJuly = (81.2 - currentHomeWeight).toFixed(1);
+
+        let decisionTitle = '🔥 突破 74.6 kg 鎖死平台！11/03 創下 74.2 kg 新低';
+        let decisionDetail = `下一步：今日單日下降 −0.4 kg 正式突破連續三日 74.6 kg 平台，距離終極目標「家中空腹 70.0 kg」僅剩 ${remainingToGoal.toFixed(1)} kg！請維持「去皮雞胸肉/大豆蛋白 + 青花菜 + 玉米鬚茶」高鉀高蛋白組合，穩步推進至 11/08 節點 (73.4 kg)。`;
+
+        return {
+          currentAvg: currentAvg.toFixed(2),
+          diff: diff.toFixed(2),
+          lossAmount: lossAmount.toFixed(2),
+          milestoneTarget: milestoneObj.weight,
+          distToMilestone: distToMilestone.toFixed(2),
+          lostSoFar: lostSoFar.toFixed(1),
+          remainingToGoal: remainingToGoal.toFixed(1),
+          progressPct: progressPct.toFixed(0),
+          totalLostSinceJuly,
+          decisionTitle,
+          decisionDetail
+        };
+      }, [weeklyWeights, lastWeekAvg, selectedMilestone, currentHomeWeight]);
+
+      const saveCurrentWeekToHistory = () => {
+        const avgNum = parseFloat(weeklyStats.currentAvg);
+        if (!avgNum || isNaN(avgNum)) return;
+        setWeightHistory(prev => {
+          const exists = prev.findIndex(item => item.id === selectedMilestone);
+          const newEntry = {
+            id: selectedMilestone,
+            avgWeight: avgNum,
+            steps: weeklyAvgSteps,
+            note: `${weeklyStats.diff > 0 ? '+' : ''}${weeklyStats.diff}kg`
+          };
+          if (exists >= 0) {
+            const updated = [...prev];
+            updated[exists] = newEntry;
+            return updated;
+          }
+          return [...prev, newEntry];
+        });
+      };
+
+      const updateWorkoutLog = (id, field, value) => {
+        setWorkoutLogs(prev => ({
+          ...prev,
+          [id]: { ...(prev[id] || { weight: '', reps: '', done: false }), [field]: value }
+        }));
+      };
+
+      const exportContents = useMemo(() => {
+        const kcalStatus = getStatus(totals.kcal, targets.kcalMin, targets.kcalMax, true).text;
+        const pStatus = getStatus(totals.p, targets.pMin, targets.pMax, false).text;
+        const fStatus = getStatus(totals.f, targets.fMin, targets.fMax, true).text;
+        const cStatus = getStatus(totals.c, targets.cMin, targets.cMax, false).text;
+        const vegStatus = totals.veg >= targets.vegMin ? '達標' : '待補足';
+        const waterStatus = waterMl >= targets.waterMin ? '達標' : '待補足';
+
+        const txtFoodLines = foodLogs.map((f, i) => `${i + 1}. ${f.name} | ${f.kcal} kcal | P:${f.p}g F:${f.f || 0}g 醣(C):${f.c || 0}g`).join('\n');
+        const txtHomeWeightLines = homeWeightLogs.map(w => `  - ${w.date}: ${Number(w.weight).toFixed(1)} kg (${w.change}) ${w.note}`).join('\n');
+
+        const txtContent = `==================================================
+【Matt 減脂執行日報】版本 ${APP_VERSION} ｜ 日期 ${APP_DATE} (${currentDayObj.label})
+==================================================
+🎯 終極目標：${GOAL_TITLE}
+🏠 目前空腹：${currentHomeWeight.toFixed(1)} kg (距離目標尚差 ${weeklyStats.remainingToGoal} kg / 進度 ${weeklyStats.progressPct}%)
+🏢 累計戰果：自 07/01 (81.2 kg) 累計總減重 −${weeklyStats.totalLostSinceJuly} kg
+
+--------------------------------------------------
+【1. 今日營養攝取總計】(${targets.label})
+--------------------------------------------------
+• 熱量 (kcal) ： ${totals.kcal.toFixed(1)} / ${targets.kcal} kcal [${kcalStatus}]
+• 蛋白質 (P)  ： ${totals.p.toFixed(1)} / ${targets.pMin}–${targets.pMax} g [${pStatus}]
+• 醣類/碳水(C)： ${totals.c.toFixed(1)} / ${targets.cMin}–${targets.cMax} g [${cStatus}]
+• 脂肪 (F)    ： ${totals.f.toFixed(1)} / ${targets.fMin}–${targets.fMax} g [${fStatus}]
+• 蔬菜與水份  ： 蔬菜 ${totals.veg.toFixed(1)} 份 [${vegStatus}] ｜ 飲水 ${waterMl} mL [${waterStatus}]
+• 今日步數    ： ${dailySteps} 步
+
+--------------------------------------------------
+【2. 今日飲食入帳明細】(${foodLogs.length} 筆)
+--------------------------------------------------
+${txtFoodLines || '(尚無紀錄)'}
+
+--------------------------------------------------
+【3. 家中晨間空腹體重軌跡】
+--------------------------------------------------
+${txtHomeWeightLines}
+
+--------------------------------------------------
+【4. 下一步行動指令】
+--------------------------------------------------
+${smartFoodSuggestions.summaryText}
+${weeklyStats.decisionTitle}：${weeklyStats.decisionDetail}
+==================================================`;
+
+        const mdFoodList = foodLogs.map(f => `- **${f.name}**: ${f.kcal} kcal (P:${f.p}g / F:${f.f || 0}g / 醣C:${f.c || 0}g)`).join('\n');
+        const mdContent = `### 📊 Matt 減脂執行日報 (${APP_DATE}｜${currentDayObj.label}｜${APP_VERSION})
+- **終極目標**：${GOAL_TITLE}（目前家中空腹：**${currentHomeWeight.toFixed(1)} kg**，尚差 **${weeklyStats.remainingToGoal} kg**，自 7/1 累計減重 **−${weeklyStats.totalLostSinceJuly} kg**）
+
+| 項目 | 今日攝取 | 目標範圍 (${targets.label}) | 狀態 |
+| :--- | :--- | :--- | :--- |
+| **熱量** | ${totals.kcal.toFixed(1)} kcal | ${targets.kcal} kcal | ${kcalStatus} |
+| **蛋白質 (P)** | ${totals.p.toFixed(1)} g | ${targets.pMin}–${targets.pMax} g | ${pStatus} |
+| **醣類/碳水 (C)** | ${totals.c.toFixed(1)} g | ${targets.cMin}–${targets.cMax} g | ${cStatus} |
+| **脂肪 (F)** | ${totals.f.toFixed(1)} g | ${targets.fMin}–${targets.fMax} g | ${fStatus} |
+| **蔬菜 / 水份** | ${totals.veg.toFixed(1)} 份 / ${(waterMl/1000).toFixed(1)} L | ≥${targets.vegMin} 份 / ≥2.5 L | 蔬:${vegStatus} / 水:${waterStatus} |
+
+#### 🍽️ 今日已攝取清單：
+${mdFoodList || '- 尚無紀錄'}
+
+**💡 下一步行動指令**：${smartFoodSuggestions.summaryText}`;
+
+        const csvRows = [
+          ['類型', '日期/時間', '品項或指標名稱', '熱量(kcal)', '蛋白質P(g)', '脂肪F(g)', '醣類碳水C(g)', '蔬菜(份)', '備註/體重(kg)'],
+          ...foodLogs.map(f => ['飲食紀錄', APP_DATE, `"${f.name}"`, f.kcal, f.p, f.f || 0, f.c || 0, f.veg || 0, '']),
+          ['今日總計', APP_DATE, '當日營養總計', totals.kcal.toFixed(1), totals.p.toFixed(1), totals.f.toFixed(1), totals.c.toFixed(1), totals.veg.toFixed(1), `飲水:${waterMl}mL / 步數:${dailySteps}`],
+          ...homeWeightLogs.map(w => ['家中空腹體重', w.date, '晨間空腹秤量', '', '', '', '', '', `${w.weight}kg (${w.change}) ${w.note}`])
+        ];
+        const csvContent = csvRows.map(r => r.join(',')).join('\n');
+
+        return { txt: txtContent, md: mdContent, csv: csvContent };
+      }, [totals, targets, waterMl, dailySteps, currentDayObj, foodLogs, homeWeightLogs, currentHomeWeight, weeklyStats, smartFoodSuggestions]);
+
+      const activeExportText = exportContents[exportFormat] || exportContents.txt;
+
+      const copyTextSafe = (textToCopy, msg = '已複製！') => {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(textToCopy).then(() => {
+              setCopied(true);
+              setDownloadedNotice(msg);
+              setTimeout(() => { setCopied(false); setDownloadedNotice(''); }, 2200);
+            }).catch(() => fallbackCopy(textToCopy, msg));
+          } else {
+            fallbackCopy(textToCopy, msg);
+          }
+        } catch (e) {
+          fallbackCopy(textToCopy, msg);
+        }
+      };
+
+      const fallbackCopy = (text, msg) => {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setCopied(true);
+        setDownloadedNotice(msg);
+        setTimeout(() => { setCopied(false); setDownloadedNotice(''); }, 2200);
+      };
+
+      const downloadFile = (formatType) => {
+        const content = exportContents[formatType] || exportContents.txt;
+        const ext = formatType === 'csv' ? 'csv' : formatType === 'md' ? 'md' : 'txt';
+        const mimeType = formatType === 'csv' ? 'text/csv;charset=utf-8;' : 'text/plain;charset=utf-8;';
+        const blob = new Blob(['\uFEFF' + content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Matt_減脂日報_${APP_DATE}_${currentDayObj.id}.${ext}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        setDownloadedNotice(`已存檔 .${ext.toUpperCase()}`);
+        setTimeout(() => setDownloadedNotice(''), 2500);
+      };
+
+      const chartData = useMemo(() => {
+        const width = 650, height = 220, padL = 44, padR = 26, padT = 24, padB = 36;
+        const plotW = width - padL - padR, plotH = height - padT - padB;
+        const maxW = 75.5, minW = 69.5;
+        const getX = (idx) => padL + (idx / (MILESTONES.length - 1)) * plotW;
+        const getY = (w) => padT + ((maxW - w) / (maxW - minW)) * plotH;
+
+        const targetPoints = MILESTONES.map((m, i) => ({ ...m, x: getX(i), y: getY(m.weight) }));
+        const actualPoints = [];
+        MILESTONES.forEach((m, i) => {
+          const rec = weightHistory.find(h => h.id === m.id);
+          if (rec && !isNaN(rec.avgWeight)) {
+            actualPoints.push({ id: m.id, weight: rec.avgWeight, x: getX(i), y: getY(rec.avgWeight) });
+          }
+        });
+
+        return {
+          width, height, padL, padR, targetPoints, actualPoints,
+          targetPolyline: targetPoints.map(p => `${p.x},${p.y}`).join(' '),
+          actualPolyline: actualPoints.map(p => `${p.x},${p.y}`).join(' '),
+          getY
+        };
+      }, [weightHistory]);
+
+      const filteredCoreFoods = useMemo(() => {
+        if (foodCategoryFilter === 'all') return MATT_CORE_FOODS;
+        return MATT_CORE_FOODS.filter(item => item.category === foodCategoryFilter);
+      }, [foodCategoryFilter]);
+
+      return (
+        <div className="min-h-screen bg-slate-950 text-slate-100 pb-24">
+          {/* 隱藏的檔案讀取器 (供跨裝置匯入 JSON 使用) */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            onChange={handleImportJsonFile}
+            className="hidden"
+          />
+
+          {/* 頂部導航 */}
+          <header className="border-b border-slate-800 bg-slate-900/95 backdrop-blur sticky top-0 z-30">
+            <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 font-bold text-lg">
+                  ⚡
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <h1 className="text-base sm:text-lg font-bold tracking-tight text-white">
+                      Matt 個人減脂與高蛋白精準決策引擎
+                    </h1>
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold">
+                      {APP_VERSION}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      本機已存 ({lastSavedTime})
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 font-mono mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span>🎯 目標：<strong className="text-emerald-400">{GOAL_TITLE}</strong></span>
+                    <span>｜</span>
+                    <span>🏠 空腹：<strong className="text-cyan-300">{currentHomeWeight.toFixed(1)} kg</strong></span>
+                    <span>｜</span>
+                    <span>🏢 累計：<strong className="text-amber-300">−{weeklyStats.totalLostSinceJuly} kg</strong></span>
+                  </p>
+                </div>
+              </div>
+
+              {/* 右側：星期切換 + 跨裝置備份/讀取快捷鍵 */}
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-1 overflow-x-auto no-scrollbar max-w-full">
+                  {DAYS_OF_WEEK.map(day => (
+                    <button
+                      key={day.id}
+                      onClick={() => { setSelectedDay(day.id); setModeOverride(null); }}
+                      className={`px-2.5 py-1 rounded-md font-medium shrink-0 transition-all ${
+                        selectedDay === day.id ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {day.label}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={exportBackupJsonFile}
+                  title="將目前所有紀錄打包成 .json 檔案，可傳到手機或電腦讀取"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600 text-cyan-300 hover:text-white border border-cyan-500/40 font-mono text-xs transition-all"
+                >
+                  📤 備份進度(.json)
+                </button>
+
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  title="讀取從手機或電腦傳過來的 .json 進度檔"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-500/40 font-mono text-xs transition-all"
+                >
+                  📥 讀取進度檔
+                </button>
+
+                <button
+                  onClick={() => downloadFile('txt')}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 font-mono text-xs transition-all"
+                >
+                  📄 存檔.TXT
+                </button>
+              </div>
+            </div>
+
+            {/* 目標進度視覺化橫幅 */}
+            <div className="bg-slate-900/80 border-t border-slate-800/80 px-3 sm:px-4 py-2">
+              <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 flex-1">
+                  <span className="font-mono text-slate-400 shrink-0">🏁 70.0kg 進度：</span>
+                  <div className="w-full max-w-xs h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all duration-500"
+                      style={{ width: `${Math.max(8, Number(weeklyStats.progressPct))}%` }}
+                    />
+                  </div>
+                  <span className="font-mono text-emerald-400 font-bold shrink-0">
+                    已減 {weeklyStats.lostSoFar}kg / 剩 {weeklyStats.remainingToGoal}kg ({weeklyStats.progressPct}%)
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {downloadedNotice && (
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+                      {downloadedNotice}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => setModeOverride(isWeekday ? 'weekend' : 'weekday')}
+                    className={`px-2.5 py-0.5 rounded-full font-medium border transition-all ${
+                      isWeekday ? 'bg-cyan-950/60 text-cyan-300 border-cyan-700/50' : 'bg-amber-950/60 text-amber-300 border-amber-700/50'
+                    }`}
+                  >
+                    🔄 {targets.label} ({targets.kcal}kcal)
+                  </button>
+                  <button
+                    onClick={() => setShowHandGuide(!showHandGuide)}
+                    className="px-2.5 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700"
+                  >
+                    {showHandGuide ? '收起手部表' : '🖐️ 手部估算表'}
+                  </button>
+                </div>
+              </div>
+
+              {showHandGuide && (
+                <div className="max-w-6xl mx-auto mt-2 pt-2 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pb-1">
+                  {HAND_PORTION_GUIDE.map((g, idx) => (
+                    <div key={idx} className="bg-slate-950/90 border border-slate-800 rounded-lg p-2.5 text-xs">
+                      <div className="font-bold text-emerald-400 mb-0.5">{g.unit}</div>
+                      <div className="text-slate-300 text-[11px]">{g.desc}</div>
+                      <div className="text-slate-400 text-[11px] mt-1">對應：{g.target}</div>
+                      <div className="font-mono text-cyan-300 text-[11px] mt-1">{g.macro}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </header>
+
+          {/* 主內容區 */}
+          <main className="max-w-6xl mx-auto px-3 sm:px-4 pt-4">
+            {/* 4 大功能分頁 Tabs */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5 bg-slate-900/70 p-1.5 rounded-xl border border-slate-800">
+              <button
+                onClick={() => setActiveTab('diet')}
+                className={`py-2.5 px-2 rounded-lg text-xs sm:text-sm font-bold transition-all ${
+                  activeTab === 'diet' ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/40' : 'text-slate-400'
+                }`}
+              >
+                🍽️ 1. 常備飲食快選
+              </button>
+              <button
+                onClick={() => setActiveTab('weight')}
+                className={`py-2.5 px-2 rounded-lg text-xs sm:text-sm font-bold transition-all ${
+                  activeTab === 'weight' ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/40' : 'text-slate-400'
+                }`}
+              >
+                ⚖️ 2. 雙軌體重與目標
+              </button>
+              <button
+                onClick={() => setActiveTab('workout')}
+                className={`py-2.5 px-2 rounded-lg text-xs sm:text-sm font-bold transition-all ${
+                  activeTab === 'workout' ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/40' : 'text-slate-400'
+                }`}
+              >
+                🏋️ 3. 訓練與機械加重
+              </button>
+              <button
+                onClick={() => setActiveTab('export')}
+                className={`py-2.5 px-2 rounded-lg text-xs sm:text-sm font-bold transition-all ${
+                  activeTab === 'export' ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/40' : 'text-slate-400'
+                }`}
+              >
+                📱💻 4. 儲存與手機電腦同步
+              </button>
+            </div>
+
+            {/* TAB 1: 專屬常備飲食快選 */}
+            {activeTab === 'diet' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <div className="lg:col-span-7 space-y-4">
+                  {/* 一鍵常態套餐 */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+                    <div className="text-xs font-mono text-emerald-400 mb-2 font-bold">
+                      ⚡ 一鍵帶入常態飲食組合（省時免逐一點選）：
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {QUICK_COMBOS.map(combo => (
+                        <button
+                          key={combo.id}
+                          onClick={() => applyCombo(combo)}
+                          className="p-2.5 rounded-lg bg-slate-950 hover:bg-emerald-950/40 border border-slate-800 hover:border-emerald-500/50 text-left transition-all"
+                        >
+                          <div className="text-xs font-bold text-emerald-300">{combo.title}</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">{combo.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 分類篩選與倍率 */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {[
+                        { id: 'all', label: '全部常備 (18)' },
+                        { id: 'protein', label: '🥩 高蛋白主力' },
+                        { id: 'veg', label: '🥦 蔬菜菌菇' },
+                        { id: 'drink', label: '🍵 代謝飲品' },
+                        { id: 'carb', label: '🌾 碳水/微調' },
+                        { id: 'fruit', label: '🍊 水果點心' },
+                        { id: 'custom_saved', label: `⭐ 自訂常用 (${savedCustomFoods.length})` },
+                        { id: 'outing', label: '🖐️ 外食手部估算' }
+                      ].map(cat => (
+                        <button
+                          key={cat.id}
+                          onClick={() => setFoodCategoryFilter(cat.id)}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            foodCategoryFilter === cat.id
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-slate-950 text-slate-400 border border-slate-800'
+                          }`}
+                        >
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 shrink-0 self-start">
+                      {[
+                        { val: 0.5, label: '0.5x' },
+                        { val: 1, label: '1x 標準' },
+                        { val: 1.5, label: '1.5x' },
+                        { val: 2, label: '2x 雙份' }
+                      ].map(m => (
+                        <button
+                          key={m.val}
+                          onClick={() => setPortionMultiplier(m.val)}
+                          className={`px-2 py-1 rounded text-xs font-mono font-medium ${
+                            portionMultiplier === m.val ? 'bg-cyan-600 text-white' : 'text-slate-400'
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 毛豆顆數微調器 */}
+                  {(foodCategoryFilter === 'all' || foodCategoryFilter === 'protein') && (
+                    <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-bold text-emerald-300">🫛 純毛豆仁（去莢熟重）精準顆數計算器</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5 font-mono">
+                          100 顆 (約 85g) = 106 kcal / 11.0g 蛋白質（1 顆 ≈ 0.11g P）
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg px-2 py-1">
+                          <input
+                            type="number"
+                            step="10"
+                            value={edamameCount}
+                            onChange={e => setEdamameCount(e.target.value)}
+                            className="w-14 bg-transparent text-center font-mono text-sm text-emerald-300 focus:outline-none"
+                          />
+                          <span className="text-xs text-slate-400">顆</span>
+                        </div>
+                        <button
+                          onClick={addCustomEdamame}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold"
+                        >
+                          +入帳 ({(edamameCount * 0.11).toFixed(1)}g P)
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 食物卡片清單 */}
+                  {foodCategoryFilter === 'custom_saved' ? (
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-mono text-emerald-400 font-bold">
+                          ⭐ 已存檔的自訂常用食品 ({savedCustomFoods.length} 項)
+                        </h3>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {savedCustomFoods.map(item => (
+                          <div key={item.id} className="flex flex-col justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div className="text-sm font-bold text-white">{item.name}</div>
+                                <div className="text-[11px] font-mono text-slate-400 mt-1">
+                                  <span className="text-amber-300">{item.kcal} kcal</span> ｜ P:{item.p}g ｜ F:{item.f}g ｜ <span className="text-cyan-300">醣C:{item.c}g</span>
+                                </div>
+                              </div>
+                              <button onClick={() => deleteSavedCustomFood(item.id)} className="text-slate-500 hover:text-rose-400 p-1">✕</button>
+                            </div>
+                            <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex justify-end">
+                              <button
+                                onClick={() => addFoodWithMultiplier(item)}
+                                className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-medium"
+                              >
+                                + 加入今日紀錄 (×{portionMultiplier})
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : foodCategoryFilter !== 'outing' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {filteredCoreFoods.map(item => {
+                        const count = itemCounts[item.id] || 0;
+                        const dispKcal = Number((item.kcal * portionMultiplier).toFixed(1));
+                        const dispP = Number((item.p * portionMultiplier).toFixed(1));
+                        const dispC = Number(((item.c || 0) * portionMultiplier).toFixed(1));
+
+                        return (
+                          <div
+                            key={item.id}
+                            className={`flex flex-col justify-between p-3.5 rounded-xl border transition-all ${
+                              count > 0 ? 'bg-emerald-950/20 border-emerald-500/50' : 'bg-slate-900 border-slate-800'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800">
+                                  {item.catLabel}
+                                </span>
+                                {count > 0 && (
+                                  <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                    今日已點 ×{Number(count.toFixed(1))}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-sm font-bold text-white mt-2">{item.name}</div>
+                              <div className="text-xs text-slate-400 mt-0.5">份量：{item.unit}</div>
+                              <div className="text-[11px] text-cyan-300/90 mt-1">💡 {item.note}</div>
+                            </div>
+
+                            <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                              <div className="font-mono text-xs">
+                                <span className="text-amber-300 font-semibold">{dispKcal}</span> kcal ｜ <span className="text-emerald-400 font-bold">P:{dispP}g</span> ｜ <span className="text-cyan-300">醣:{dispC}g</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                {count > 0 && (
+                                  <button
+                                    onClick={() => removeLastByRefId(item.id)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-slate-950 hover:bg-rose-950 text-slate-300 border border-slate-800 text-xs font-bold"
+                                  >
+                                    −
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => addFoodWithMultiplier(item)}
+                                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all"
+                                >
+                                  ＋ 加入
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                      <h3 className="text-xs font-mono text-amber-400 mb-3 font-bold">🖐️ 外食聚餐手部目測快選</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {OUTING_PRESETS.map(item => (
+                          <button
+                            key={item.id}
+                            onClick={() => addFoodWithMultiplier(item)}
+                            className="flex items-center justify-between p-3 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left"
+                          >
+                            <div>
+                              <div className="text-xs sm:text-sm font-medium text-slate-100">{item.name}</div>
+                              <div className="text-xs font-mono text-slate-400 mt-1">
+                                {Math.round(item.kcal * portionMultiplier)} kcal ｜ <span className="text-emerald-400 font-bold">P:{(item.p * portionMultiplier).toFixed(0)}g</span> F:{(item.f * portionMultiplier).toFixed(0)}g 醣C:{(item.c * portionMultiplier).toFixed(0)}g
+                              </div>
+                            </div>
+                            <span className="text-amber-400 font-bold text-base">＋</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 手動輸入營養標示區 */}
+                  <form onSubmit={handleAddCustomFood} className="bg-slate-900 border border-emerald-500/30 rounded-xl p-4 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <h3 className="text-xs font-mono text-emerald-400 font-bold">
+                        ➕ 營養標示手動輸入（含蛋白質 P、醣類/碳水 C、脂肪 F 與常用存檔）
+                      </h3>
+                      <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={saveToPresetChecked}
+                          onChange={e => setSaveToPresetChecked(e.target.checked)}
+                          className="rounded accent-emerald-500"
+                        />
+                        <span>同時存檔至「⭐ 自訂常用」</span>
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+                      <input
+                        type="text"
+                        required
+                        placeholder="品項名稱 (必填)"
+                        value={customFood.name}
+                        onChange={e => setCustomFood({ ...customFood, name: e.target.value })}
+                        className="col-span-2 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs sm:text-sm text-white"
+                      />
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="蛋白質 P(g)"
+                        value={customFood.p}
+                        onChange={e => setCustomFood({ ...customFood, p: e.target.value })}
+                        className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-xs sm:text-sm font-mono text-emerald-300"
+                      />
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="醣類/碳水 C(g)"
+                        value={customFood.c}
+                        onChange={e => setCustomFood({ ...customFood, c: e.target.value })}
+                        className="bg-slate-950 border border-cyan-500/40 rounded-lg px-2.5 py-2 text-xs sm:text-sm font-mono text-cyan-300"
+                      />
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="脂肪 F(g)"
+                        value={customFood.f}
+                        onChange={e => setCustomFood({ ...customFood, f: e.target.value })}
+                        className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-xs sm:text-sm font-mono text-amber-300"
+                      />
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder={autoCalculatedKcal > 0 ? `熱量(自動${autoCalculatedKcal})` : '熱量 kcal'}
+                        value={customFood.kcal}
+                        onChange={e => setCustomFood({ ...customFood, kcal: e.target.value })}
+                        className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-xs sm:text-sm font-mono text-white"
+                      />
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                      <div className="flex items-center gap-2 text-xs text-slate-400">
+                        <span>蔬菜份數：</span>
+                        <select
+                          value={customFood.veg}
+                          onChange={e => setCustomFood({ ...customFood, veg: e.target.value })}
+                          className="bg-slate-950 border border-slate-800 rounded px-2 py-1 font-mono text-xs text-slate-200"
+                        >
+                          <option value="0">0 份</option>
+                          <option value="0.5">0.5 份</option>
+                          <option value="1">1 份 (1拳頭)</option>
+                          <option value="1.5">1.5 份</option>
+                          <option value="2">2 份</option>
+                        </select>
+                      </div>
+                      <button
+                        type="submit"
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg px-4 py-2 text-xs sm:text-sm"
+                      >
+                        ＋ {saveToPresetChecked ? '加入今日紀錄並存為常用' : '加入今日紀錄'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* 右側：即時營養監控 */}
+                <div className="lg:col-span-5 space-y-4">
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-base font-bold text-white">📊 今日攝取即時監控</h2>
+                      <button onClick={() => setFoodLogs([])} className="text-xs text-slate-400 hover:text-rose-400">
+                        清空今日紀錄
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <div className="flex justify-between text-xs font-mono mb-1">
+                          <span className="text-slate-300 font-semibold">🥩 蛋白質 (保肌核心)</span>
+                          <span className="text-emerald-400 font-bold">{totals.p.toFixed(1)} / {targets.pMin}–{targets.pMax} g</span>
+                        </div>
+                        <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                          <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${Math.min(100, (totals.p / targets.pMin) * 100)}%` }} />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between text-xs font-mono mb-1">
+                          <span className="text-slate-300 font-semibold">🔥 總熱量 (赤字控制)</span>
+                          <span className={totals.kcal > targets.kcalMax ? 'text-rose-400 font-bold' : 'text-amber-300 font-bold'}>
+                            {totals.kcal.toFixed(1)} / {targets.kcal} kcal
+                          </span>
+                        </div>
+                        <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                          <div
+                            className={`h-full transition-all duration-300 ${totals.kcal > targets.kcalMax ? 'bg-rose-500' : 'bg-amber-400'}`}
+                            style={{ width: `${Math.min(100, (totals.kcal / targets.kcal) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <table className="w-full text-left border-collapse text-xs font-mono">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400">
+                          <th className="py-2">指標</th>
+                          <th className="py-2">今日累計</th>
+                          <th className="py-2">目標範圍</th>
+                          <th className="py-2 text-right">狀態</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {[
+                          { label: '熱量 (kcal)', val: `${totals.kcal.toFixed(1)}`, target: `${targets.kcal}`, status: getStatus(totals.kcal, targets.kcalMin, targets.kcalMax, true) },
+                          { label: '蛋白質 (P)', val: `${totals.p.toFixed(1)} g`, target: `${targets.pMin}–${targets.pMax} g`, status: getStatus(totals.p, targets.pMin, targets.pMax, false) },
+                          { label: '醣類/碳水 (C)', val: `${totals.c.toFixed(1)} g`, target: `${targets.cMin}–${targets.cMax} g`, status: getStatus(totals.c, targets.cMin, targets.cMax, false) },
+                          { label: '脂肪 (F)', val: `${totals.f.toFixed(1)} g`, target: `${targets.fMin}–${targets.fMax} g`, status: getStatus(totals.f, targets.fMin, targets.fMax, true) },
+                          { label: '蔬菜份數', val: `${totals.veg.toFixed(1)} 份`, target: `≥ ${targets.vegMin} 份`, status: getStatus(totals.veg, targets.vegMin, 10, false) }
+                        ].map((row, i) => (
+                          <tr key={i}>
+                            <td className="py-2 font-sans font-medium text-slate-200">{row.label}</td>
+                            <td className="py-2 text-white font-semibold">{row.val}</td>
+                            <td className="py-2 text-slate-400">{row.target}</td>
+                            <td className="py-2 text-right">
+                              <span className={`inline-block px-2 py-0.5 rounded text-[11px] border ${row.status.color}`}>
+                                {row.status.text}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                      <span className="text-xs text-slate-300">
+                        💧 飲水：<strong className="font-mono text-sm text-cyan-300">{waterMl}</strong> / 2500 mL
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setWaterMl(Math.max(0, waterMl - 300))} className="px-2 py-1 rounded bg-slate-800 text-xs font-mono">-300</button>
+                        <button onClick={() => setWaterMl(waterMl + 300)} className="px-2 py-1 rounded bg-cyan-600/30 border border-cyan-500/40 text-xs font-mono text-cyan-200">+300</button>
+                        <button onClick={() => setWaterMl(waterMl + 500)} className="px-2 py-1 rounded bg-cyan-600/30 border border-cyan-500/40 text-xs font-mono text-cyan-200">+500</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 蛋白質缺口直接換算 */}
+                  <div className="bg-slate-900 border border-emerald-500/30 rounded-xl p-4 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-mono text-emerald-400 font-bold">
+                        🎯 蛋白質尚缺：{smartFoodSuggestions.pDiff.toFixed(1)} g
+                      </h3>
+                      <span className="text-[11px] font-mono text-slate-400">餘裕：{smartFoodSuggestions.kcalDiff} kcal</span>
+                    </div>
+                    {smartFoodSuggestions.pDiff > 0 ? (
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <button onClick={() => addFoodWithMultiplier(MATT_CORE_FOODS[0], 1)} className="p-2 rounded-lg bg-slate-950 border border-slate-800 text-left">
+                          <div className="text-slate-400 text-[11px]">去皮雞胸肉</div>
+                          <div className="font-mono font-bold text-emerald-400">🍗 {smartFoodSuggestions.chickenNeeded} 份 (+1)</div>
+                        </button>
+                        <button onClick={() => addFoodWithMultiplier(MATT_CORE_FOODS[1], 1)} className="p-2 rounded-lg bg-slate-950 border border-slate-800 text-left">
+                          <div className="text-slate-400 text-[11px]">大豆分離蛋白</div>
+                          <div className="font-mono font-bold text-cyan-400">🥤 {smartFoodSuggestions.soyProteinNeeded} 匙 (+1)</div>
+                        </button>
+                        <button onClick={() => addFoodWithMultiplier(MATT_CORE_FOODS[2], 1)} className="p-2 rounded-lg bg-slate-950 border border-slate-800 text-left">
+                          <div className="text-slate-400 text-[11px]">上友高蛋白乳</div>
+                          <div className="font-mono font-bold text-amber-300">🥛 {smartFoodSuggestions.shangYouNeeded} 瓶 (+1)</div>
+                        </button>
+                        <button onClick={() => addFoodWithMultiplier(MATT_CORE_FOODS[3], 1)} className="p-2 rounded-lg bg-slate-950 border border-slate-800 text-left">
+                          <div className="text-slate-400 text-[11px]">純毛豆仁</div>
+                          <div className="font-mono font-bold text-emerald-300">🫛 約 {smartFoodSuggestions.edamameGramsOrCount} 顆</div>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 rounded-lg bg-emerald-950/30 text-xs text-emerald-300 font-bold">
+                        🎉 今日蛋白質已達標 ({totals.p.toFixed(1)}g)！
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 今日已入帳明細 */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2.5">
+                      <h3 className="text-xs font-mono text-slate-400">今日已入帳明細 ({foodLogs.length} 筆)</h3>
+                    </div>
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                      {foodLogs.map(item => (
+                        <div key={item.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-xs">
+                          <div>
+                            <div className="text-slate-100 font-medium">{item.name}</div>
+                            <div className="text-slate-400 font-mono text-[11px]">
+                              <span className="text-amber-300">{item.kcal} kcal</span> ｜ <span className="text-emerald-400 font-semibold">P:{item.p}g</span> ｜ <span className="text-cyan-300">醣C:{item.c || 0}g</span> ｜ F:{item.f || 0}g
+                            </div>
+                          </div>
+                          <button onClick={() => removeFood(item.id)} className="text-slate-500 hover:text-rose-400 px-2 py-1">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: 雙軌體重與 70kg 目標 */}
+            {activeTab === 'weight' && (
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-slate-900 border border-emerald-500/40 rounded-xl p-4">
+                    <div className="text-xs font-mono text-emerald-400">🏠 家中秤量（晨間空腹最新）</div>
+                    <div className="text-3xl font-mono font-bold text-white mt-1">{currentHomeWeight.toFixed(1)} kg</div>
+                    <div className="text-xs text-slate-300 mt-1">打破連續三日 74.6 kg 平台，單日 −0.4 kg！</div>
+                  </div>
+                  <div className="bg-slate-900 border border-cyan-500/40 rounded-xl p-4">
+                    <div className="text-xs font-mono text-cyan-400">🎯 距離「家中空腹 70.0 kg」目標</div>
+                    <div className="text-3xl font-mono font-bold text-cyan-300 mt-1">−{weeklyStats.remainingToGoal} kg</div>
+                    <div className="text-xs text-slate-300 mt-1">進度 {weeklyStats.progressPct}%（自 10/17 已減 {weeklyStats.lostSoFar} kg）</div>
+                  </div>
+                  <div className="bg-slate-900 border border-amber-500/40 rounded-xl p-4">
+                    <div className="text-xs font-mono text-amber-400">🏢 自 07/01 (81.2kg) 累計總戰果</div>
+                    <div className="text-3xl font-mono font-bold text-amber-300 mt-1">−{weeklyStats.totalLostSinceJuly} kg</div>
+                    <div className="text-xs text-slate-300 mt-1">公司秤 81.2 → 75.1 kg (−6.1 kg)</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                  <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+                    <h3 className="text-base font-bold text-white">🏠 家中晨間空腹體重紀錄（手機/電腦皆可新增）</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs font-mono">
+                        <thead>
+                          <tr className="border-b border-slate-800 text-slate-400">
+                            <th className="py-2 px-2">日期</th>
+                            <th className="py-2 px-2">空腹體重</th>
+                            <th className="py-2 px-2">變化</th>
+                            <th className="py-2 px-2">備註</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60">
+                          {homeWeightLogs.map((row, idx) => (
+                            <tr key={idx} className={idx === homeWeightLogs.length - 1 ? 'bg-emerald-950/30 text-emerald-200 font-bold' : ''}>
+                              <td className="py-2 px-2">{row.date}</td>
+                              <td className="py-2 px-2 text-sm">{Number(row.weight).toFixed(1)} kg</td>
+                              <td className="py-2 px-2 text-emerald-400">{row.change}</td>
+                              <td className="py-2 px-2 font-sans text-slate-300">{row.note}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <form onSubmit={handleAddHomeWeightLog} className="pt-3 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-4 gap-2">
+                      <input
+                        type="text"
+                        placeholder="日期 (例 11/04)"
+                        value={newWeightInput.date}
+                        onChange={e => setNewWeightInput({ ...newWeightInput, date: e.target.value })}
+                        className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-white"
+                      />
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="空腹體重 (kg)"
+                        value={newWeightInput.weight}
+                        onChange={e => setNewWeightInput({ ...newWeightInput, weight: e.target.value })}
+                        className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="備註 (選填)"
+                        value={newWeightInput.note}
+                        onChange={e => setNewWeightInput({ ...newWeightInput, note: e.target.value })}
+                        className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                      />
+                      <button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg px-3 py-2 text-xs">
+                        ＋ 新增空腹體重
+                      </button>
+                    </form>
+                  </div>
+
+                  <div className="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+                    <h3 className="text-base font-bold text-white">🏢 公司秤量階段紀錄 (07/01 – 11/02)</h3>
+                    <table className="w-full text-left border-collapse text-xs font-mono">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400">
+                          <th className="py-2 px-2">日期</th>
+                          <th className="py-2 px-2">體重</th>
+                          <th className="py-2 px-2">變化</th>
+                          <th className="py-2 px-2">備註</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {COMPANY_WEIGHT_LOGS.map((row, idx) => (
+                          <tr key={idx}>
+                            <td className="py-2 px-2 text-slate-300">{row.date}</td>
+                            <td className="py-2 px-2 font-bold text-amber-300">{row.weight.toFixed(1)} kg</td>
+                            <td className="py-2 px-2 text-emerald-400">{row.change}</td>
+                            <td className="py-2 px-2 font-sans text-slate-400">{row.note}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* SVG 曲線圖 */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                    <h2 className="text-sm sm:text-base font-bold text-white">📈 10/17 (75.0kg) → 12/21 (70.0kg) 里程碑推進曲線</h2>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selectedMilestone}
+                        onChange={e => setSelectedMilestone(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 text-slate-200 rounded-lg px-2 py-1 font-mono text-xs"
+                      >
+                        {MILESTONES.map(m => (
+                          <option key={m.id} value={m.id}>{m.date}: {m.weight.toFixed(1)}kg</option>
+                        ))}
+                      </select>
+                      <button onClick={saveCurrentWeekToHistory} className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold">
+                        更新節點
+                      </button>
+                    </div>
+                  </div>
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-2 overflow-x-auto">
+                    <svg viewBox={`0 0 ${chartData.width} ${chartData.height}`} className="w-full h-auto min-w-[480px]">
+                      {[75, 74, 73, 72, 71, 70].map(w => {
+                        const y = chartData.getY(w);
+                        return (
+                          <g key={w}>
+                            <line x1={chartData.padL} y1={y} x2={chartData.width - chartData.padR} y2={y} stroke={w === 70 ? '#10b981' : '#1e293b'} strokeWidth="1" />
+                            <text x={chartData.padL - 8} y={y + 4} textAnchor="end" className="fill-slate-500 font-mono text-[10px]">{w}.0</text>
+                          </g>
+                        );
+                      })}
+                      <polyline fill="none" stroke="#64748b" strokeWidth="2" strokeDasharray="4 4" points={chartData.targetPolyline} />
+                      {chartData.actualPoints.length > 1 && (
+                        <polyline fill="none" stroke="#10b981" strokeWidth="3" points={chartData.actualPolyline} />
+                      )}
+                      {chartData.targetPoints.map(pt => (
+                        <g key={pt.id}>
+                          <circle cx={pt.x} cy={pt.y} r="3.5" className="fill-slate-700 stroke-slate-400" />
+                          <text x={pt.x} y={chartData.height - 10} textAnchor="middle" className="fill-slate-400 font-mono text-[10px]">{pt.id}</text>
+                        </g>
+                      ))}
+                      {chartData.actualPoints.map(pt => (
+                        <g key={`act-${pt.id}`}>
+                          <circle cx={pt.x} cy={pt.y} r="5.5" className="fill-emerald-400 stroke-slate-950" strokeWidth="2" />
+                          <text x={pt.x} y={pt.y - 10} textAnchor="middle" className="fill-emerald-300 font-mono text-[11px] font-bold">{pt.weight.toFixed(1)}</text>
+                        </g>
+                      ))}
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: 訓練與機械加重 */}
+            {activeTab === 'workout' && (
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-bold text-white">{currentDayObj.label}：{currentDayObj.workoutTitle}</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">週三機械式重訓只要第 3 組標準完成 12 下，下週強制加重 +2.5~5 kg！</p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(dId => {
+                      const dObj = DAYS_OF_WEEK.find(x => x.id === dId);
+                      return (
+                        <button
+                          key={dId}
+                          onClick={() => setSelectedDay(dId)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${
+                            selectedDay === dId ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300' : 'bg-slate-950 border-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {dObj.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 font-mono text-slate-400">
+                        <th className="py-2.5 px-2">完成</th>
+                        <th className="py-2.5 px-2">動作名稱</th>
+                        <th className="py-2.5 px-2">目標</th>
+                        <th className="py-2.5 px-2">負重(kg)</th>
+                        <th className="py-2.5 px-2">次數/分鐘</th>
+                        <th className="py-2.5 px-2">加重判定</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {(WORKOUT_SCHEMAS[selectedDay] || []).map(ex => {
+                        const log = workoutLogs[ex.id] || { weight: '', reps: '', done: false };
+                        const shouldIncrease = ex.isMachine && parseInt(log.reps, 10) >= 12;
+                        return (
+                          <tr key={ex.id}>
+                            <td className="py-2.5 px-2">
+                              <input
+                                type="checkbox"
+                                checked={log.done}
+                                onChange={e => updateWorkoutLog(ex.id, 'done', e.target.checked)}
+                                className="w-4 h-4 accent-emerald-500"
+                              />
+                            </td>
+                            <td className="py-2.5 px-2 font-medium text-white">{ex.name}</td>
+                            <td className="py-2.5 px-2 font-mono text-slate-300">{ex.sets}×{ex.target}</td>
+                            <td className="py-2.5 px-2">
+                              {ex.isMachine ? (
+                                <input
+                                  type="number"
+                                  value={log.weight}
+                                  onChange={e => updateWorkoutLog(ex.id, 'weight', e.target.value)}
+                                  className="w-16 bg-slate-950 border border-slate-800 rounded px-2 py-1 font-mono text-white"
+                                />
+                              ) : <span className="text-slate-500 font-mono">自重</span>}
+                            </td>
+                            <td className="py-2.5 px-2">
+                              <input
+                                type="number"
+                                value={log.reps}
+                                onChange={e => updateWorkoutLog(ex.id, 'reps', e.target.value)}
+                                className="w-16 bg-slate-950 border border-slate-800 rounded px-2 py-1 font-mono text-white"
+                              />
+                            </td>
+                            <td className="py-2.5 px-2">
+                              {shouldIncrease ? (
+                                <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">
+                                  ⚡ 滿12下！下週加重至 {Number(log.weight || 0) + 2.5}kg+
+                                </span>
+                              ) : <span className="text-slate-400">{ex.note}</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: 跨裝置儲存與手機/電腦無縫同步中心 */}
+            {activeTab === 'export' && (
+              <div className="space-y-5">
+                {/* 跨裝置（手機 ⇄ 電腦）互傳教學與按鈕卡 */}
+                <div className="bg-slate-900 border border-cyan-500/40 rounded-xl p-5 space-y-4">
+                  <div>
+                    <h2 className="text-base font-bold text-cyan-300 flex items-center gap-2">
+                      📱💻 手機 ⇄ 電腦 跨裝置無縫更新與檔案備份
+                    </h2>
+                    <p className="text-xs text-slate-300 mt-1">
+                      不需安裝任何軟體！在電腦更新後，可點選「下載 .JSON 進度備份檔」或「複製跨裝置同步碼」傳到 LINE / Google 雲端硬碟；在手機打開網頁後點選「讀取進度檔」或貼上同步碼，兩邊資料即刻 100% 同步！
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* 方式 A：檔案備份與讀取 */}
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+                      <div className="text-xs font-bold text-emerald-400">方法 A：使用進度檔案 (.json) 儲存與互傳</div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={exportBackupJsonFile}
+                          className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+                        >
+                          📤 1. 下載目前進度檔 (.json)
+                        </button>
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-3.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs"
+                        >
+                          📥 2. 讀取進度檔 (.json) 更新本機
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 方式 B：免傳檔案！LINE 同步碼複製貼上 */}
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2.5">
+                      <div className="text-xs font-bold text-cyan-400">方法 B：免傳檔案！一鍵複製「跨裝置同步碼」貼到 LINE</div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => copyTextSafe(JSON.stringify(currentFullState), '✅ 已複製跨裝置同步碼！可貼到 LINE')}
+                          className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shrink-0"
+                        >
+                          📋 複製目前同步碼
+                        </button>
+                        <input
+                          type="text"
+                          placeholder="在此貼上另一台裝置的同步碼..."
+                          value={syncCodeInput}
+                          onChange={e => setSyncCodeInput(e.target.value)}
+                          className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white"
+                        />
+                        <button
+                          onClick={() => {
+                            try {
+                              applyImportedState(JSON.parse(syncCodeInput));
+                              setSyncCodeInput('');
+                            } catch (e) {
+                              alert('同步碼格式不正確，請確認完整複製！');
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold text-xs shrink-0"
+                        >
+                          載入
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 日報匯出 (.TXT / .CSV / .MD) */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                    <div>
+                      <h3 className="text-base font-bold text-white">📄 減脂日報匯出 (.TXT 記事本 / .CSV Excel / .MD)</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => downloadFile('txt')} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold">
+                        下載 .TXT 純文字
+                      </button>
+                      <button onClick={() => downloadFile('csv')} className="px-3 py-1.5 rounded-lg bg-cyan-600 text-white text-xs font-bold">
+                        下載 .CSV 試算表
+                      </button>
+                      <button onClick={() => copyTextSafe(activeExportText, '✅ 已複製日報內容！')} className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-xs font-bold">
+                        {copied ? '✅ 已複製！' : '📋 複製下方報告'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 text-xs">
+                    {[
+                      { id: 'txt', label: '📄 .TXT 純文字' },
+                      { id: 'csv', label: '📊 .CSV Excel 表格' },
+                      { id: 'md', label: '📝 .MD 筆記格式' }
+                    ].map(fmt => (
+                      <button
+                        key={fmt.id}
+                        onClick={() => setExportFormat(fmt.id)}
+                        className={`px-3 py-1.5 rounded-lg font-medium ${
+                          exportFormat === fmt.id ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-950 text-slate-400'
+                        }`}
+                      >
+                        {fmt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <pre className="bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs text-slate-200 overflow-x-auto whitespace-pre-wrap leading-relaxed select-all">
+                    {activeExportText}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </main>
+
+          {/* 固定底部狀態列 */}
+          <footer className="fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur border-t border-emerald-500/30 px-3 sm:px-4 py-2.5 shadow-2xl">
+            <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-100 truncate">
+                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-xs font-bold shrink-0 border border-emerald-500/40">
+                  下一步：
+                </span>
+                <span className="truncate font-medium">
+                  {activeTab === 'weight' ? weeklyStats.decisionDetail : smartFoodSuggestions.summaryText}
+                </span>
+              </div>
+              <span className="hidden md:inline-block text-[11px] font-mono text-slate-400 shrink-0">
+                空腹：{currentHomeWeight.toFixed(1)}→70.0kg ｜ 今日：{totals.kcal.toFixed(0)}/{targets.kcal} kcal (P:{totals.p.toFixed(1)}g)
+              </span>
+            </div>
+          </footer>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
