@@ -26,9 +26,9 @@
   <script type="text/babel">
     const { useState, useMemo, useEffect, useRef } = React;
 
-    // --- 核心版本與專屬 Google Apps Script 雲端 API ---
+// --- 核心版本與專屬 Google Apps Script 雲端 API ---
     const APP_VERSION = 'v3.3 (Google 試算表雲端同步版)';
-    const APP_DATE = '2026-11-03';
+    const APP_DATE = new Date().toLocaleDateString('sv-SE'); // ✅ 讓全域 APP_DATE 永遠等於當天日期
     const GOAL_TITLE = '家中晨間空腹 70.0 kg';
     const STORAGE_KEY = 'matt_fatloss_engine_v3_state';
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzMEdDcaWNfK1fAWtDp7mrtCGITinl224fbJWk0VRpb47uqn2ayq7P5xLQ4YWXYenFN/exec';
@@ -305,12 +305,13 @@
         fetchFromGoogleSheet();
       }, []);
 
-      // --- 核心：一鍵同步推播至 Google 試算表 ---
+// --- 核心：一鍵同步推播至 Google 試算表 ---
       const pushToGoogleSheet = async () => {
         setIsSyncing(true);
         setCloudStatus('正在上傳雲端試算表...');
+        const todayStr = new Date().toLocaleDateString('sv-SE'); // ✅ 自動產出當天本地 "YYYY-MM-DD"
         const payload = {
-          date: APP_DATE,
+          date: todayStr, // ✅ 改用動態日期
           weight: currentHomeWeight,
           kcal: totals.kcal.toFixed(1),
           protein: totals.p.toFixed(1),
